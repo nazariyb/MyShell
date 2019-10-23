@@ -18,11 +18,11 @@ using std::endl;
 
 enum EXIT_CODE
     {
-    SUCCESS, FAILURE, FORCE_EXIT, PRINT_LAST_CODE
+    SUCCESS = 0, HELP_EXIT = 0, FAILURE, FORCE_EXIT, PRINT_LAST_CODE
     };
 
-extern EXIT_CODE last_exit_code;// {static_cast<EXIT_CODE>(0)};
-
+extern EXIT_CODE last_exit_code;
+extern int shell_exit_code;
 
 using Args = struct Args
     {
@@ -36,8 +36,37 @@ using Args = struct Args
 char ** vecstr2char ( VecStr vecStr );
 
 
-void parse_arguments ( const VecStr & vecStr, Args & args );
+std::vector<std::string> parse_line ( const std::string & commandline );
 
+namespace Color {
+    enum Code
+        {
+        FG_RED = 31,
+        FG_GREEN = 32,
+        FG_BLUE = 34,
+        FG_DEFAULT = 39,
+        BG_RED = 41,
+        BG_GREEN = 42,
+        BG_BLUE = 44,
+        BG_DEFAULT = 49
+        };
+
+
+    class Modifier
+        {
+        Code code;
+    public:
+        explicit Modifier ( Code pCode ) : code(pCode)
+        { }
+
+
+        friend std::ostream &
+        operator<< ( std::ostream & os, const Modifier & mod )
+        {
+            return os << "\033[" << mod.code << "m";
+        }
+        };
+}
 
 class Exit : public std::runtime_error
     {

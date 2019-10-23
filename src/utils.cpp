@@ -12,6 +12,28 @@ char ** vecstr2char ( VecStr vecStr )
 }
 
 
+std::vector<std::string> parse_line ( const std::string & commandline )
+{
+    bool quotes_are_opened {false};
+    std::vector<std::string> args {};
+    std::string buff {};
+    for ( auto & c: commandline )
+    {
+        if ( c == '"' ) quotes_are_opened ^= static_cast<unsigned>(1);
+
+        if (( c == ' ' ) && ( !quotes_are_opened ))
+        {
+            args.push_back(buff);
+            buff.clear();
+            continue;
+        }
+        buff += c;
+    }
+    args.push_back(buff);
+    return args;
+}
+
+
 void parse_arguments ( const VecStr & vecStr, Args & args )
 {
     auto argv = vecstr2char(vecStr);

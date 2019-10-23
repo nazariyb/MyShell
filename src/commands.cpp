@@ -18,8 +18,11 @@ Args Command::parse_arguments ( const VecStr & vecStr )
 
         po::positional_options_description pos_desc;
         po::command_line_parser parser {static_cast<int>(vecStr.size()), argv};
-        parser.options(desc).positional(pos_desc).allow_unregistered();
-        po::parsed_options parsed_options = parser.run();
+        auto parsed_options = parser
+                .options(desc)
+                .positional(pos_desc)
+                        //                                   .allow_unregistered()
+                .run();
 
         po::variables_map vm;
         store(parsed_options, vm);
@@ -50,9 +53,14 @@ Args mCd::parse_arguments ( const VecStr & vecStr )
                 ("path", po::value<std::string>(), "Help screen");
 
         po::positional_options_description pos_desc;
+        pos_desc.add("path", -1);
+
         po::command_line_parser parser {static_cast<int>(vecStr.size()), argv};
-        parser.options(desc).positional(pos_desc).allow_unregistered();
-        po::parsed_options parsed_options = parser.run();
+        auto parsed_options = parser
+                .options(desc)
+                .positional(pos_desc)
+                        //                                   .allow_unregistered()
+                .run();
 
         po::variables_map vm;
         store(parsed_options, vm);
@@ -89,8 +97,11 @@ Args mExit::parse_arguments ( const VecStr & vecStr )
         pos_desc.add("exit_code", -1);
 
         po::command_line_parser parser {static_cast<int>(vecStr.size()), argv};
-        parser.options(desc).positional(pos_desc).allow_unregistered();
-        po::parsed_options parsed_options = parser.run();
+        auto parsed_options = parser
+                .options(desc)
+                .positional(pos_desc)
+                .allow_unregistered()
+                .run();
 
         po::variables_map vm;
         store(parsed_options, vm);
@@ -155,32 +166,106 @@ Args mEcho::parse_arguments ( const VecStr & vecStr )
 }
 
 
+Args mExport::parse_arguments ( const VecStr & vecStr )
+{
+    Args args {};
+    auto argv = vecstr2char(vecStr);
+
+    try
+    {
+        od desc {"Options"};
+        desc.add_options()
+                ("words", po::value<std::vector<std::string>>()->
+                        multitoken()->zero_tokens()->composing(), "Help screen");
+
+        po::positional_options_description pos_desc;
+        pos_desc.add("words", -1);
+
+        po::command_line_parser parser {static_cast<int>(vecStr.size()), argv};
+        auto parsed_options = parser
+                .options(desc)
+                .positional(pos_desc)
+                .allow_unregistered()
+                .run();
+
+
+        po::variables_map vm;
+        store(parsed_options, vm);
+        notify(vm);
+
+        if ( vm.count("words"))
+            args.words = vm["words"].as<VecStr>();
+
+    }
+    catch ( const po::error & ex )
+    {
+        std::cerr << ex.what() << '\n';
+        delete[]( argv );
+        throw ex;
+    }
+    delete[]( argv );
+    return args;
+}
+
+
 EXIT_CODE mErrno::run ( const VecStr & parsed_line )
 {
-    auto args = parse_arguments(parsed_line);
-    if ( args.help )
+    try
     {
-        cout << "errno help" << endl;
-        return SUCCESS;
+        auto args = parse_arguments(parsed_line);
+        if ( args.help )
+        {
+            cout << "errno help" << endl;
+            return HELP_EXIT;
+        }
+        cout << last_exit_code << endl;
     }
-    cout << last_exit_code << endl;
+    catch ( std::exception & ex )
+    {
+        return FAILURE;
+    }
+
     return SUCCESS;
 }
 
 
 EXIT_CODE mPwd::run ( const VecStr & parsed_line )
 {
-    auto args = parse_arguments(parsed_line);
-    if ( args.help ) cout << "pwd help" << endl;
+    try
+    {
+        auto args = parse_arguments(parsed_line);
+        if ( args.help )
+        {
+            cout << "pwd help" << endl;
+            return HELP_EXIT;
+        }
+        cout << fs::current_path() << endl;
+    }
+    catch ( std::exception & ex )
+    {
+        return FAILURE;
+    }
     return SUCCESS;
 }
 
 
 EXIT_CODE mCd::run ( const VecStr & parsed_line )
 {
-    auto args = parse_arguments(parsed_line);
-    if ( args.help ) cout << "cd help" << endl;
-    else cout << "NO cd help" << endl;
+    try
+    {
+        auto args = parse_arguments(parsed_line);
+        if ( args.help )
+        {
+            cout << "cd help" << endl;
+            return HELP_EXIT;
+        }
+        fs::current_path(args.path);
+    }
+    catch ( std::exception & ex )
+    {
+        std::cerr << "myshell: " << ex.what() << endl;
+        return FAILURE;
+    }
     return SUCCESS;
 }
 
@@ -191,9 +276,11 @@ EXIT_CODE mExit::run ( const VecStr & parsed_line )
     if ( args.help )
     {
         cout << "exit help" << endl;
-        return SUCCESS;
+        return HELP_EXIT;
     }
-    throw Exit(args.exit_code);
+    shell_exit_code = args.exit_code;
+    return FORCE_EXIT;
+    //    throw Exit(args.exit_code);
 }
 
 

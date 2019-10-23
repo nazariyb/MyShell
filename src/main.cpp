@@ -11,32 +11,17 @@
 
 
 EXIT_CODE last_exit_code {static_cast<EXIT_CODE>(0)};
+int shell_exit_code {0};
 
+VecStr PATH;
 
-std::vector<std::string> parse_line ( const std::string & commandline )
-{
-    bool quotes_are_opened {false};
-    std::vector<std::string> args {};
-    std::string buff {};
-    for ( auto & c: commandline )
-    {
-        if ( c == '"' ) quotes_are_opened ^= 1;
-
-        if (( c == ' ' ) && ( !quotes_are_opened ))
-        {
-            args.push_back(buff);
-            buff.clear();
-            continue;
-        }
-        buff += c;
-    }
-    args.push_back(buff);
-    return args;
-}
+//TODO: зробити функцію яка запускає зовнішні команди (з fork, exec)
+//TODO: потрібна змінна, щоб в неї зберігати інші змінні (ті, які мають бути доступні дочірним процесам)
 
 
 int main ()
 {
+    PATH.push_back("../scripts");
     std::map<std::string, Command *> commands {
             {"merrno",  new mErrno {}},
             {"mpwd",    new mPwd {}},
@@ -48,28 +33,35 @@ int main ()
 
     char * line;
 
+    Color::Modifier green(Color::FG_GREEN);
+    Color::Modifier def(Color::FG_DEFAULT);
     while ( true )
     {
-
-        line = readline(std::string {"[myshell]:" + fs::current_path().string() + "$: "}.c_str());
+        std::stringstream path {};
+        path << green << "[myshell]:" << fs::current_path().string() << "$: " << def;
+        line = readline(path.str().c_str());
         if ( !( line && ( *line ))) continue;
 
         add_history(line);
 
         auto parsed_line = parse_line(line);
 
-        try
+        if ( !commands.count(parsed_line[0]))
         {
-            last_exit_code = commands[parsed_line[0]]->run(parsed_line);
+            //            TODO: перевірити чи в нас немає такої токманди в PATH, якщо є то запустити
+            //            TODO: якщо ні, то спробувати її запустити (це може бути команда з повним шляхом, н-д /usr/bin/ls)
+
+            //            TODO: і вже тоді повідомити про ерор
+            std::cerr << "\nmyshell: Command '" << parsed_line[0] << "' not found.\n" << endl;
+            continue;
         }
-        catch ( Exit & ex )
+
+        last_exit_code = commands[parsed_line[0]]->run(parsed_line);
+
+        if ( last_exit_code == FORCE_EXIT )
         {
             free(line);
-            return ex.what();
-        }
-        catch ( std::exception & ex )
-        {
-            std::cerr << "Error ocurred: " << ex.what() << endl;
+            return shell_exit_code;
         }
 
     }
