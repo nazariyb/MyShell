@@ -23,6 +23,8 @@ enum EXIT_CODE
 
 extern EXIT_CODE last_exit_code;
 extern int shell_exit_code;
+extern VecStr PATH;
+
 
 using Args = struct Args
     {
@@ -78,6 +80,8 @@ public:
     int what ()
     { return std::stoi(std::runtime_error::what()); }
     };
+
+void run_if_in_path(std::string command_name);
 
 
 #endif //MYSHELL_UTILS_H

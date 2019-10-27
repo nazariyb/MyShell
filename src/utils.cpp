@@ -1,6 +1,7 @@
 #include <boost/program_options/positional_options.hpp>
 #include <boost/program_options.hpp>
 #include "utils.h"
+#include <unistd.h>
 
 
 char ** vecstr2char ( VecStr vecStr )
@@ -89,4 +90,42 @@ void parse_arguments ( const VecStr & vecStr, Args & args )
     }
     delete[]( argv );
 
+}
+
+void run_if_in_path(std::string command_name){
+    for (auto &loc: PATH){
+        if (boost::filesystem::exists(loc+command_name) & (! access (loc+command_name, X_OK))){
+            //TODO fork-exec
+            return;
+        }
+    }
+    if (! access (command_name, X_OK)){
+        //TODO fork-exec
+        return;
+    }
+    throw std::runtime_error("No such command exists");
+}
+
+void fork_exec(std::string exec_name, VecStr arguments){
+
+    pid_t parent = getpid();
+    pid_t pid = fork();
+
+
+    if (pid == -1)
+    {
+        throw std::runtime_error("Failed to fork()");
+    }
+    else if (pid > 0)
+    {
+
+        int status;
+        waitpid(pid, &status, 0);
+    }
+    else
+    {
+        execve(exec_name.c_str(), vecstr2char(arguments), environ);
+        std::runtime_error("Parent: Failed to execute" + exec_name);
+    }
+    return 0;
 }

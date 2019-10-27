@@ -15,7 +15,6 @@ int shell_exit_code {0};
 
 VecStr PATH;
 
-//TODO: зробити функцію яка запускає зовнішні команди (з fork, exec)
 //TODO: потрібна змінна, щоб в неї зберігати інші змінні (ті, які мають бути доступні дочірним процесам)
 
 
@@ -48,11 +47,14 @@ int main ()
 
         if ( !commands.count(parsed_line[0]))
         {
-            //            TODO: перевірити чи в нас немає такої токманди в PATH, якщо є то запустити
-            //            TODO: якщо ні, то спробувати її запустити (це може бути команда з повним шляхом, н-д /usr/bin/ls)
 
-            //            TODO: і вже тоді повідомити про ерор
-            std::cerr << "\nmyshell: Command '" << parsed_line[0] << "' not found.\n" << endl;
+            try{
+                run_if_in_path(parsed_line[0]);
+            }
+
+            catch (std::exception &e){
+                std::cerr << "\nmyshell: Command '" << parsed_line[0] << "' not found.\n" << endl;
+            }
             continue;
         }
 
