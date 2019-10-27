@@ -4,7 +4,7 @@ project(MyShell)
 set(CMAKE_CXX_STANDARD 17)
 set(Boost_USE_STATIC_LIBS OFF)
 
-find_package(Boost COMPONENTS system filesystem program_options REQUIRED)
+find_package(Boost COMPONENTS system filesystem program_options regex REQUIRED)
 find_library(Readline_LIBRARY NAMES readline)
 
 include_directories(${Readline_INCLUDE_DIRS} ${Boost_INCLUDE_DIR})

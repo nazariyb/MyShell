@@ -1,8 +1,12 @@
 #include <boost/program_options/positional_options.hpp>
 #include <boost/program_options.hpp>
+#include <boost/range/adaptors.hpp>
+#include <boost/regex.hpp>
 #include "utils.h"
 #include <unistd.h>
 #include <sys/wait.h>
+#include <libgen.h>
+
 
 
 char ** vecstr2char ( VecStr vecStr )
@@ -138,4 +142,33 @@ void fork_exec(const std::string & exec_name, const VecStr & arguments){
         execve(exec_name.c_str(), argm, env);
         std::flush(std::cout);
     }
+}
+
+
+std::vector<std::string> list_files (const std::string &path){
+    char* ts1 = strdup(const_cast<char *>(path.c_str()));
+    char* ts2 = strdup(const_cast<char *>(path.c_str()));
+
+    char* dir = dirname(ts1);
+    char* filename = basename(ts2);
+
+    if (!boost::filesystem::exists(dir)){
+        throw std::runtime_error("No such directory");
+    }
+
+    boost::regex wildcard (filename);
+
+    std::vector<std::string> matching_files;
+
+    boost::filesystem::directory_iterator end_itr;
+
+    for(boost::filesystem::directory_iterator i(dir); i != end_itr; ++i){
+        if( !boost::filesystem::is_regular_file( i->status() ) ) continue;
+
+        if( !boost::regex_match( i->path().filename().string(), wildcard) ) continue;
+
+        matching_files.push_back(i->path().filename().string());
+    }
+
+    return matching_files;
 }
