@@ -20,6 +20,7 @@ VecStr PATH;
 
 int main ()
 {
+
     PATH.push_back("../scripts");
     std::map<std::string, Command *> commands {
             {"merrno",  new mErrno {}},
@@ -67,5 +68,6 @@ int main ()
         }
 
     }
+
 
 }
