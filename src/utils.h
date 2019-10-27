@@ -87,6 +87,8 @@ void fork_exec(const std::string & exec_name, const VecStr & arguments);
 
 
 std::vector<std::string> list_files (const std::string &path);
+std::vector<std::string> map_to_VectStr (std::map <std::string, std::string> vars_map);
+void add_pair (std::string);
 
 
 #endif //MYSHELL_UTILS_H
