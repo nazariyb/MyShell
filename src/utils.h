@@ -81,7 +81,8 @@ public:
     { return std::stoi(std::runtime_error::what()); }
     };
 
-void run_if_in_path(std::string command_name);
+void run_if_in_path(const std::vector<std::string> &command_opts);
+void fork_exec(const std::string & exec_name, const VecStr & arguments);
 
 
 #endif //MYSHELL_UTILS_H

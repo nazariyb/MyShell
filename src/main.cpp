@@ -49,7 +49,7 @@ int main ()
         {
 
             try{
-                run_if_in_path(parsed_line[0]);
+                run_if_in_path(parsed_line);
             }
 
             catch (std::exception &e){

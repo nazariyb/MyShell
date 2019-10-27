@@ -92,21 +92,22 @@ void parse_arguments ( const VecStr & vecStr, Args & args )
 
 }
 
-void run_if_in_path(std::string command_name){
+void run_if_in_path(const std::vector<std::string> &command_opts){
+    auto command_name = command_opts[0];
     for (auto &loc: PATH){
         if (boost::filesystem::exists(loc+command_name) & (! access (loc+command_name, X_OK))){
-            //TODO fork-exec
+            fork_exec(loc+command_name, command_opts);
             return;
         }
     }
     if (! access (command_name, X_OK)){
-        //TODO fork-exec
+        fork_exec(command_name, command_opts);
         return;
     }
     throw std::runtime_error("No such command exists");
 }
 
-void fork_exec(std::string exec_name, VecStr arguments){
+void fork_exec(const std::string & exec_name, const VecStr & arguments){
 
     pid_t parent = getpid();
     pid_t pid = fork();
