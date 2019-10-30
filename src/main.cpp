@@ -1,13 +1,12 @@
 #include <iostream>
+#include <map>
 
 #include <boost/filesystem.hpp>
-#include <boost/program_options.hpp>
-#include "commands.h"
 
 #include <readline/readline.h>
 #include <readline/history.h>
-#include <map>
 
+#include "commands.h"
 #include "utils.h"
 
 
@@ -15,13 +14,14 @@ EXIT_CODE last_exit_code{static_cast<EXIT_CODE>(0)};
 int shell_exit_code{0};
 
 VecStr PATH;
-
-std::map<std::string, std::string> env_vars;
+MapStrStr vars;
+MapStrStr env_vars;
 
 
 int main() {
+    PATH.emplace_back(fs::current_path().string() + "/../bin/");
+    PATH.emplace_back("/bin/");
 
-    PATH.push_back("../scripts/");
     std::map<std::string, Command *> commands{
             {"merrno",  new mErrno{}},
             {"mpwd",    new mPwd{}},
@@ -35,6 +35,7 @@ int main() {
 
     Color::Modifier green(Color::FG_GREEN);
     Color::Modifier def(Color::FG_DEFAULT);
+
     while (true) {
         std::stringstream path{};
         path << green << "[myshell]:" << fs::current_path().string() << "$: " << def;
@@ -44,16 +45,14 @@ int main() {
         add_history(line);
 
         auto parsed_line = parse_line(line);
+        if ( !commands.count(parsed_line[0]))
+        {
+            if ( try_to_execute(parsed_line) == SUCCESS )
+                continue;
+            else if ( parsed_line.size() == 1 && try_add_var(parsed_line[0]) == SUCCESS )
+                continue;
 
-        if (!commands.count(parsed_line[0])) {
-
-            try {
-                run_if_in_path(parsed_line);
-            }
-
-            catch (std::exception &e) {
-                std::cerr << "\nmyshell: Command '" << parsed_line[0] << "' not found.\n" << endl;
-            }
+            std::cerr << "\nmyshell: Command '" << parsed_line[0] << "' not found.\n" << endl;
             continue;
         }
 
@@ -65,18 +64,5 @@ int main() {
         }
 
     }
-
-
-    std::map<std::string, std::string> m;
-
-    m["a1"] = "1";
-    m["b2"] = "2";
-    m["c3"] = "3";
-
-    std::vector<std::string> vec = map_to_VectStr(m);
-    for (int j = 0; j < vec.size(); ++j) {
-        std::cout << vec.at(j) << std::endl;
-    }
-
 
 }

@@ -15,3 +15,15 @@ target_link_libraries(myshell
         ${Boost_LIBRARIES}
         readline
         )
+
+add_executable(mycat scripts/mycat.cpp)
+
+target_link_libraries(mycat
+        ${Boost_LIBRARIES}
+        )
+ADD_CUSTOM_COMMAND(
+        TARGET mycat
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND}
+        ARGS -E copy mycat ${CMAKE_CURRENT_SOURCE_DIR}/bin
+)

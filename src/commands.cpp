@@ -1,15 +1,17 @@
 #include "commands.h"
 #include "utils.h"
 
-#include <cstdlib>
+#include <boost/algorithm/string/predicate.hpp>
 #include <boost/program_options/positional_options.hpp>
 #include <boost/program_options.hpp>
 
 
+bool variable_not_found {false};
+
 Args Command::parse_arguments ( const VecStr & vecStr )
 {
     Args args {};
-    auto argv = vecstr2char(vecStr);
+    auto argv = vecstr2char(vecStr, false);
     try
     {
         od desc {"Options"};
@@ -21,7 +23,6 @@ Args Command::parse_arguments ( const VecStr & vecStr )
         auto parsed_options = parser
                 .options(desc)
                 .positional(pos_desc)
-                        //                                   .allow_unregistered()
                 .run();
 
         po::variables_map vm;
@@ -44,7 +45,7 @@ Args Command::parse_arguments ( const VecStr & vecStr )
 Args mCd::parse_arguments ( const VecStr & vecStr )
 {
     Args args {};
-    auto argv = vecstr2char(vecStr);
+    auto argv = vecstr2char(vecStr, false);
     try
     {
         od desc {"Options"};
@@ -59,7 +60,6 @@ Args mCd::parse_arguments ( const VecStr & vecStr )
         auto parsed_options = parser
                 .options(desc)
                 .positional(pos_desc)
-                        //                                   .allow_unregistered()
                 .run();
 
         po::variables_map vm;
@@ -85,7 +85,7 @@ Args mCd::parse_arguments ( const VecStr & vecStr )
 Args mExit::parse_arguments ( const VecStr & vecStr )
 {
     Args args {};
-    auto argv = vecstr2char(vecStr);
+    auto argv = vecstr2char(vecStr, false);
     try
     {
         od desc {"Options"};
@@ -127,7 +127,7 @@ Args mExit::parse_arguments ( const VecStr & vecStr )
 Args mEcho::parse_arguments ( const VecStr & vecStr )
 {
     Args args {};
-    auto argv = vecstr2char(vecStr);
+    auto argv = vecstr2char(vecStr, false);
 
     try
     {
@@ -169,23 +169,21 @@ Args mEcho::parse_arguments ( const VecStr & vecStr )
 Args mExport::parse_arguments ( const VecStr & vecStr )
 {
     Args args {};
-    auto argv = vecstr2char(vecStr);
+    auto argv = vecstr2char(vecStr, false);
 
     try
     {
         od desc {"Options"};
         desc.add_options()
-                ("words", po::value<std::vector<std::string>>()->
-                        multitoken()->zero_tokens()->composing(), "Help screen");
+                ("var_name", po::value<std::string>(), "Help screen");
 
         po::positional_options_description pos_desc;
-        pos_desc.add("words", -1);
+        pos_desc.add("var_name", -1);
 
         po::command_line_parser parser {static_cast<int>(vecStr.size()), argv};
         auto parsed_options = parser
                 .options(desc)
                 .positional(pos_desc)
-                .allow_unregistered()
                 .run();
 
 
@@ -193,8 +191,8 @@ Args mExport::parse_arguments ( const VecStr & vecStr )
         store(parsed_options, vm);
         notify(vm);
 
-        if ( vm.count("words"))
-            args.words = vm["words"].as<VecStr>();
+        if ( vm.count("var_name"))
+            args.var_name = vm["var_name"].as<std::string>();
 
     }
     catch ( const po::error & ex )
@@ -215,7 +213,9 @@ EXIT_CODE mErrno::run ( const VecStr & parsed_line )
         auto args = parse_arguments(parsed_line);
         if ( args.help )
         {
-            cout << "errno help" << endl;
+            cout << "merrno [-h|--help] – вивести код завершення останньої програми чи команди\n"
+                    "Повертає нуль, якщо ще жодна програма не виконувалася.\n"
+                    "Після неї самої merrno повертає нуль, крім випадку, коли було передано невірні опції." << endl;
             return HELP_EXIT;
         }
         cout << last_exit_code << endl;
@@ -236,7 +236,8 @@ EXIT_CODE mPwd::run ( const VecStr & parsed_line )
         auto args = parse_arguments(parsed_line);
         if ( args.help )
         {
-            cout << "pwd help" << endl;
+            cout << "mpwd [-h|--help] – вивести поточний шлях\n"
+                    "Після неї merrno повертає нуль, крім випадку, коли було передано невірні опції." << endl;
             return HELP_EXIT;
         }
         cout << fs::current_path() << endl;
@@ -256,10 +257,15 @@ EXIT_CODE mCd::run ( const VecStr & parsed_line )
         auto args = parse_arguments(parsed_line);
         if ( args.help )
         {
-            cout << "cd help" << endl;
+            cout << "mcd <path> [-h|--help] -- перейти до шляху <path>\n"
+                    "Після неї merrno повертає нуль, якщо вдалося перейти в нову директорію, не нуль -- якщо не вдалося або було передано невірні опції."
+                 << endl;
             return HELP_EXIT;
         }
-        fs::current_path(args.path);
+        auto value = get_variable(args.path)[0];
+        if ( value.empty() && variable_not_found )
+            return VARIABLE_NOT_FOUND;
+        fs::current_path(value);
     }
     catch ( std::exception & ex )
     {
@@ -275,7 +281,8 @@ EXIT_CODE mExit::run ( const VecStr & parsed_line )
     auto args = parse_arguments(parsed_line);
     if ( args.help )
     {
-        cout << "exit help" << endl;
+        cout << "mexit [код завершення] [-h|--help]  – вийnb із myshell\n"
+                "Якщо не передано код завершення -- вийде із кодом 0." << endl;
         return HELP_EXIT;
     }
     shell_exit_code = args.exit_code;
@@ -288,10 +295,37 @@ EXIT_CODE mEcho::run ( const VecStr & parsed_line )
 {
     auto args = parse_arguments(parsed_line);
 
-    if ( !args.words.empty())
-        for ( auto & word: args.words )
-            cout << word << " ";
+    if ( args.help )
+    {
+        cout << "mecho [text|$<var_name>] [text|$<var_name>]  [text|$<var_name>] ...\n"
+                "Без аргументів не робить нічого. Аргументів може бути довільна кількість.\n"
+                "Якщо аргумент починається не з $ -- просто виводить його на консоль.\n"
+                "Якщо з $ -- шукає відповідну змінну та виводить її вміст. Якщо такої змінної не існує -- не виводить нічого.\n"
+                "Після неї merrno повертає нуль." << endl;
+        return HELP_EXIT;
+    }
 
+    if ( !args.words.empty())
+    {
+        VecStr values {};
+        try
+        {
+            values = expand_arguments(args.words);
+        }
+        catch ( std::runtime_error & re )
+        {
+            //            std::cerr << re.what() << endl;
+            return VARIABLE_NOT_FOUND;
+        }
+        catch ( std::exception & ex )
+        {
+            std::cerr << ex.what() << endl;
+            return FAILURE;
+        }
+
+        for ( auto & value : values )
+            cout << value << " ";
+    }
     cout << endl;
     return SUCCESS;
 }
@@ -299,6 +333,21 @@ EXIT_CODE mEcho::run ( const VecStr & parsed_line )
 
 EXIT_CODE mExport::run ( const VecStr & parsed_line )
 {
-    //    auto args = parse_arguments(parsed_line);
+    auto args = parse_arguments(parsed_line);
+
+    if ( args.help )
+    {
+        cout << "mexport <var_name>[=VAL]\n"
+                "Додає глобальну змінну -- поміщається в блоку змінних середовища для дочірніх процесів.\n"
+                "Якщо змінна не існувала, і не передано \"=VAL\", створюється як порожня.\n"
+                "Якщо передано \"=VAL\", їй присвоюється відповідне значення. За потреби -- змінна створюється.\n"
+                "Після неї merrno повертає нуль, якщо створити змінну вдалося, не нуль -- якщо ні." << endl;
+        return HELP_EXIT;
+    }
+
+    auto delim_ind = args.var_name.find('=');
+    if ( delim_ind == std::string::npos ) env_vars[args.var_name] = "";
+    else env_vars[args.var_name.substr(0, delim_ind)] = args.var_name.substr(delim_ind + 1, std::string::npos);
+
     return SUCCESS;
 }

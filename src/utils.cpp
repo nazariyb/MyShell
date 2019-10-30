@@ -1,30 +1,39 @@
 #include <boost/program_options/positional_options.hpp>
-#include <boost/program_options.hpp>
 #include <boost/algorithm/string.hpp>
-#include <boost/regex.hpp>
-#include "utils.h"
+
 #include <unistd.h>
 #include <sys/wait.h>
-#include <libgen.h>
+#include <bits/stdc++.h>
 #include <map>
+#include <fnmatch.h>
+
+#include "utils.h"
 
 
-extern std::map<std::string, std::string> env_vars;
+char ** vecstr2char ( VecStr vecStr, bool add_null )
+{
+    auto vec_size = vecStr.size();
+    auto argv = new char * [vec_size + add_null];
 
-
-char **vecstr2char(VecStr vecStr) {
-    auto argv = new char *[vecStr.size()];
-    for (size_t i = 0; i < vecStr.size(); ++i)
+    for ( size_t i = 0; i < vec_size; ++i )
         argv[i] = (char *) (vecStr[i].c_str());
+
+    if ( add_null )
+        argv[vec_size] = nullptr;
+
     return argv;
 }
 
 
-std::vector<std::string> parse_line(const std::string &commandline) {
+std::vector<std::string> parse_line ( const std::string & commandline )
+{
     bool quotes_are_opened{false};
     std::vector<std::string> args{};
     std::string buff{};
-    for (auto &c: commandline) {
+
+    for ( auto & c: commandline )
+    {
+        if ( c == ' ' && buff.empty() && args.empty()) continue;
         if (c == '"') quotes_are_opened ^= static_cast<unsigned>(1);
 
         if ((c == ' ') && (!quotes_are_opened)) {
@@ -39,141 +48,168 @@ std::vector<std::string> parse_line(const std::string &commandline) {
 }
 
 
-void parse_arguments(const VecStr &vecStr, Args &args) {
-    auto argv = vecstr2char(vecStr);
-    cout << argv[0] << endl;
-    cout << argv[1] << endl;
-    cout << "size: " << vecStr.size() << endl;
-    try {
-        od desc{"Options"};
-        desc.add_options()
-                ("help,h", po::bool_switch(), "Help screen")
-                ("path", po::value<std::string>(), "for cd")
-                ("exit_code", po::value<int>(), "for exit")
-                ("words", po::value<std::vector<std::string>>()->
-                        multitoken()->zero_tokens()->composing(), "for echo")
-                ("var_name", po::value<std::string>(), "for export");
+VecStr expand_arguments ( const VecStr & arguments )
+{
+    VecStr expanded_args {};
 
-        po::positional_options_description pos_desc;
-        pos_desc.add("path", -1);
-        pos_desc.add("exit_code", -1);
-        pos_desc.add("words", -1);
-        pos_desc.add("var_name", -1);
-
-        po::command_line_parser parser{static_cast<int>(vecStr.size()), argv};
-        parser.options(desc).positional(pos_desc).allow_unregistered();
-        po::parsed_options parsed_options = parser.run();
-
-        po::variables_map vm;
-        store(parsed_options, vm);
-        notify(vm);
-
-        if (vm.count("help"))
-            args.help = true;
-
-        if (vm.count("path"))
-            args.path = vm["path"].as<std::string>();
-
-        if (vm.count("exit_code"))
-            args.exit_code = vm["exit_code"].as<int>();
-
-        if (vm.count("words"))
-            args.words = vm["words"].as<VecStr>();
-
-        if (vm.count("var_name"))
-            args.var_name = vm["var_name"].as<std::string>();
-
-    }
-    catch (const po::error &ex) {
-        std::cerr << ex.what() << '\n';
-        delete[](argv);
-        throw ex;
-    }
-    delete[](argv);
-
-}
-
-void run_if_in_path(const std::vector<std::string> &command_opts) {
-    auto command_name = command_opts[0];
-    for (auto &loc: PATH) {
-        if (boost::filesystem::exists(loc + command_name) & (!access((loc + command_name).c_str(), X_OK))) {
-            fork_exec(loc + command_name, command_opts);
-            return;
+    for ( auto & arg: arguments )
+    {
+        auto vars = get_variable(arg);
+        for ( auto & var: vars )
+        {
+            if ( var.empty() && variable_not_found )
+                throw std::runtime_error("Variable " + arg + " not found");
+            expanded_args.push_back(var);
         }
     }
-    if (!access(command_name.c_str(), X_OK)) {
-        fork_exec(command_name, command_opts);
-        return;
-    }
-    throw std::runtime_error("No such command exists");
+
+    return expanded_args;
 }
 
-void fork_exec(const std::string &exec_name, const VecStr &arguments) {
 
-    pid_t parent = getpid();
+void fork_exec ( const std::string & exec_name, const VecStr & arguments_ )
+{
+
+    //    pid_t parent = getpid();
     pid_t pid = fork();
 
 
     if (pid == -1) {
-        throw std::runtime_error("Failed to fork()");
+        throw std::runtime_error("Failed to fork");
     } else if (pid > 0) {
-
         int status;
         waitpid(pid, &status, 0);
+        last_exit_code = static_cast<EXIT_CODE>(status);
     } else {
-        //        for (auto & a: arguments)
-        //            cout << a << endl;
-        //        cout << "filename: " << fs::path{exec_name}.filename() << endl;
-        auto exec_name_name = new char[fs::path{exec_name}.filename().size()];
-        strcpy(exec_name_name, fs::path{exec_name}.filename().c_str());
-        char *argm[] = {exec_name_name, NULL};
-        char *env[] = {NULL};
-        execve(exec_name.c_str(), argm, env);
-        std::flush(std::cout);
+        VecStr arguments {};
+        try
+        {
+            arguments = expand_arguments(arguments_);
+        }
+        catch ( std::exception & ex )
+        {
+            throw ex;
+        }
+        arguments[0] = fs::path {exec_name}.filename().string();
+        auto args = vecstr2char(arguments, true);
+        auto env = vecstr2char(map2vecstr(env_vars), true);
+
+        execve(exec_name.c_str(), args, env);
+        delete[] args;
+        delete[] env;
     }
 }
 
 
-std::vector<std::string> list_files(const std::string &path) {
-    char *ts1 = strdup(const_cast<char *>(path.c_str()));
-    char *ts2 = strdup(const_cast<char *>(path.c_str()));
+int try_to_execute ( const std::vector<std::string> & command_opts )
+{
+    auto command_name = command_opts[0];
 
-    char *dir = dirname(ts1);
-    char *filename = basename(ts2);
-
-    if (!boost::filesystem::exists(dir)) {
-        throw std::runtime_error("No such directory");
+    try
+    {
+        for ( auto & loc: PATH )
+        {
+            if ( boost::filesystem::exists(loc + command_name) & ( !access(( loc + command_name ).c_str(), X_OK)))
+            {
+                fork_exec(loc + command_name, command_opts);
+                return SUCCESS;
+            }
+        }
+        if ( !access(command_name.c_str(), X_OK))
+        {
+            fork_exec(command_name, command_opts);
+            return SUCCESS;
+        }
     }
+    catch ( std::exception & ex )
+    {
+        std::cerr << "myshell: " << ex.what() << endl;
+    }
+    return COMMAND_EXECUTION_ERROR;
+}
 
-    boost::regex wildcard(filename);
 
-    std::vector<std::string> matching_files;
+VecStr open_wildcard ( const std::string & path_ )
+{
+    auto path = fs::path {path_};
+    auto parent_path = path.parent_path().string();
+    auto dir = ( parent_path.empty()) ? "." : parent_path;
 
+    auto filename = path.filename().string();
+    auto pattern = filename.c_str();
+
+    VecStr matching_files;
     boost::filesystem::directory_iterator end_itr;
+    try
+    {
+        for ( boost::filesystem::directory_iterator i(dir); i != end_itr; ++i )
+        {
 
-    for (boost::filesystem::directory_iterator i(dir); i != end_itr; ++i) {
-        if (!boost::filesystem::is_regular_file(i->status())) continue;
+            auto current_filename = i->path().filename().string();
+            if ( !boost::filesystem::is_regular_file(i->status())) continue;
 
-        if (!boost::regex_match(i->path().filename().string(), wildcard)) continue;
+            //      fnmatch returns 0 if string matches the pattern
+            if ( fnmatch(pattern, current_filename.c_str(), FNM_FILE_NAME)) continue;
 
-        matching_files.push_back(i->path().filename().string());
+            matching_files.push_back(i->path().filename().string());
+        }
+    }
+    catch ( std::exception & ex )
+    {
+        //        std::cerr << "myshell: " << ex.what() << endl;
     }
 
-    return matching_files;
+    return ( matching_files.empty()) ? VecStr {path_} : matching_files;
 }
 
 
-std::vector<std::string> map_to_VectStr(std::map<std::string, std::string> vars_map) {
+std::vector<std::string> map2vecstr ( const MapStrStr & vars_map )
+{
+
     std::vector<std::string> vars_vec;
-    for (auto const&[key, val] : vars_map) { vars_vec.push_back(key + "=" + val); }
+
+    for ( auto const&[key, val] : vars_map )
+        vars_vec.emplace_back(key + "=" + val);
 
     return vars_vec;
 }
 
 
-void add_pair(std::string pair) {
-    std::vector<std::string> strs;
-    boost::split(strs, pair, boost::is_any_of("="));
-    env_vars[strs[0]] = strs[1];
+int try_add_var ( const std::string & pair )
+{
+    auto delim_ind = pair.find('=');
+
+    if ( delim_ind == std::string::npos ) return NOT_VALID_VARIABLE;
+    else vars[pair.substr(0, delim_ind)] = pair.substr(delim_ind + 1, std::string::npos);
+
+    return SUCCESS;
+}
+
+
+VecStr get_variable ( const std::string & word_ )
+{
+    if ( boost::starts_with(word_, "$"))
+    {
+        auto word = word_.substr(1, std::string::npos);
+
+        if ( vars.count(word))
+        {
+            variable_not_found = false;
+            return {vars[word]};
+        }
+        else if ( env_vars.count(word))
+        {
+            variable_not_found = false;
+            return {env_vars[word]};
+        }
+        else
+        {
+            std::cerr << "\nmyshell: Variable '" << word << "' not found.\n" << endl;
+            variable_not_found = true;
+            return {std::string {""}};
+        }
+    }
+    auto list = open_wildcard(word_);
+    return ( list.empty()) ? VecStr {word_} : list;
 }
 
