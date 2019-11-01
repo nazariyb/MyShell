@@ -139,10 +139,9 @@ VecStr open_wildcard ( const std::string & path_ )
     auto pattern = filename.c_str();
 
     VecStr matching_files;
-    boost::filesystem::directory_iterator end_itr;
     try
     {
-        for ( boost::filesystem::directory_iterator i(dir); i != end_itr; ++i )
+        for ( fs::directory_iterator end_itr, i(dir); i != end_itr; ++i )
         {
 
             auto current_filename = i->path().filename().string();

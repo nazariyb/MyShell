@@ -18,7 +18,8 @@ MapStrStr vars;
 MapStrStr env_vars;
 
 
-int main() {
+int main ()
+{
     PATH.emplace_back(fs::current_path().string() + "/../bin/");
     PATH.emplace_back("/bin/");
 
@@ -36,7 +37,8 @@ int main() {
     Color::Modifier green(Color::FG_GREEN);
     Color::Modifier def(Color::FG_DEFAULT);
 
-    while (true) {
+    while ( true )
+    {
         std::stringstream path{};
         path << green << "[myshell]:" << fs::current_path().string() << "$: " << def;
         line = readline(path.str().c_str());
@@ -60,6 +62,8 @@ int main() {
 
         if (last_exit_code == FORCE_EXIT) {
             free(line);
+            for ( auto & command: commands )
+                delete command.second;
             return shell_exit_code;
         }
 
