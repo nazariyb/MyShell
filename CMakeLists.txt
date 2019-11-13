@@ -24,6 +24,7 @@ target_link_libraries(myshell
         readline
         )
 
+# MYCAT
 add_executable(mycat
         scripts/mycat/mycat.cpp)
 
@@ -37,6 +38,7 @@ ADD_CUSTOM_COMMAND(
         ARGS -E copy mycat ${CMAKE_CURRENT_SOURCE_DIR}/bin
 )
 
+# MYLS
 add_executable(myls
         scripts/myls/myls.cpp
         scripts/myls/utils.cpp
@@ -56,4 +58,79 @@ ADD_CUSTOM_COMMAND(
         POST_BUILD
         COMMAND ${CMAKE_COMMAND}
         ARGS -E copy myls ${CMAKE_CURRENT_SOURCE_DIR}/bin
+)
+
+# MYCP
+add_executable(mycp
+        scripts/mycp/mycp.cpp
+        )
+
+target_link_libraries(mycp
+        ${Boost_LIBRARIES}
+        )
+ADD_CUSTOM_COMMAND(
+        TARGET mycp
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND}
+        ARGS -E copy mycp ${CMAKE_CURRENT_SOURCE_DIR}/bin
+)
+
+# MYGREP
+add_executable(mygrep
+        scripts/mygrep/mygrep.cpp
+        )
+
+target_link_libraries(mygrep
+        ${Boost_LIBRARIES}
+        )
+ADD_CUSTOM_COMMAND(
+        TARGET mygrep
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND}
+        ARGS -E copy mygrep ${CMAKE_CURRENT_SOURCE_DIR}/bin
+)
+
+# MYMKDIR
+add_executable(mymkdir
+        scripts/mymkdir/mymkdir.cpp
+        )
+
+target_link_libraries(mymkdir
+        ${Boost_LIBRARIES}
+        )
+ADD_CUSTOM_COMMAND(
+        TARGET mymkdir
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND}
+        ARGS -E copy mymkdir ${CMAKE_CURRENT_SOURCE_DIR}/bin
+)
+
+# MYMV
+add_executable(mymv
+        scripts/mymv/mymv.cpp
+        )
+
+target_link_libraries(mymv
+        ${Boost_LIBRARIES}
+        )
+ADD_CUSTOM_COMMAND(
+        TARGET mymv
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND}
+        ARGS -E copy mymv ${CMAKE_CURRENT_SOURCE_DIR}/bin
+)
+
+# MYRM
+add_executable(myrm
+        scripts/myrm/myrm.cpp
+        )
+
+target_link_libraries(myrm
+        ${Boost_LIBRARIES}
+        )
+ADD_CUSTOM_COMMAND(
+        TARGET myrm
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND}
+        ARGS -E copy myrm ${CMAKE_CURRENT_SOURCE_DIR}/bin
 )
