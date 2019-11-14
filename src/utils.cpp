@@ -6,6 +6,7 @@
 #include <bits/stdc++.h>
 #include <map>
 #include <fnmatch.h>
+#include <fcntl.h>
 
 #include "utils.h"
 
@@ -212,3 +213,22 @@ VecStr get_variable ( const std::string & word_ )
     return ( list.empty()) ? VecStr {word_} : list;
 }
 
+
+void redirect ( bool in, bool out, const std::string & input, const std::string & output )
+{
+    if ( in )
+    { //if '<' char was found in string inputted by user
+        auto fd = open(input.c_str(), O_RDONLY, 0);
+        dup2(fd, STDIN_FILENO);
+        //        in = 0;
+        //        current_in = dup(0);  // Fix for symmetry with second paragraph
+    }
+
+    if ( out )
+    { //if '>' was found in string inputted by user
+        auto fd = creat(output.c_str(), 0644);
+        dup2(fd, STDOUT_FILENO);
+        //        out = 0;
+        //        current_out = dup(1);
+    }
+}
