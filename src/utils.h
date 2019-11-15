@@ -90,7 +90,7 @@ namespace Color {
 //    };
 
 
-int try_to_execute ( const std::vector<std::string> & command_opts );
+int try_to_execute ( VecStr & command_opts );
 //void fork_exec(const std::string & exec_name, const VecStr & arguments);
 
 
@@ -102,6 +102,6 @@ int try_add_var ( const std::string & pair );
 
 VecStr get_variable ( const std::string & word_ );
 
-VecStr expand_arguments ( const VecStr & arguments );
+VecStr expand_arguments ( VecStr & arguments, Args & args );
 
 #endif //MYSHELL_UTILS_H

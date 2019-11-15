@@ -9,6 +9,7 @@
 #include <fcntl.h>
 
 #include "utils.h"
+#include "commands.h"
 
 
 char ** vecstr2char ( VecStr vecStr, bool add_null )
@@ -49,9 +50,11 @@ std::vector<std::string> parse_line ( const std::string & commandline )
 }
 
 
-VecStr expand_arguments ( const VecStr & arguments )
+VecStr expand_arguments ( VecStr & arguments, Args & args )
 {
     VecStr expanded_args {};
+
+    Command::parse_redirections(arguments, args);
 
     for ( auto & arg: arguments )
     {
@@ -68,18 +71,47 @@ VecStr expand_arguments ( const VecStr & arguments )
 }
 
 
-void fork_exec ( const std::string & exec_name, const VecStr & arguments_ )
+int redirect ( const Args & args )
+{
+    int fd;
+    if ( !args.input.empty())
+    {
+        fd = open(args.input.c_str(), O_RDONLY);
+        if ( !( fcntl(fd, F_GETFD) != -1 || errno != EBADF )) return -1;
+        dup2(fd, STDIN_FILENO);
+        close(fd);
+    }
+    if ( !args.output.empty())
+    {
+        // read & write for file's owner, read for group & others
+        fd = creat(args.output.c_str(), S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+        if ( !( fcntl(fd, F_GETFD) != -1 || errno != EBADF )) return -1;
+        dup2(fd, STDOUT_FILENO);
+        close(fd);
+    }
+    if ( !args.error_output.empty())
+    {
+        // read & write for file's owner, read for group & others
+        if ( !( args.error_output == args.output ))
+        {
+            fd = creat(args.error_output.c_str(), S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+            if ( !( fcntl(fd, F_GETFD) != -1 || errno != EBADF )) return -1;
+            dup2(fd, STDERR_FILENO);
+            close(fd);
+        }
+        else
+            dup2(STDOUT_FILENO, STDERR_FILENO);
+    }
+    return SUCCESS;
+}
+
+
+void fork_exec ( const std::string & exec_name, VecStr & arguments_ )
 {
 
     //    pid_t parent = getpid();
     pid_t pid = fork();
 
-    // =======================
-    auto in = true;
-    auto out = true;
-    auto input = "inp.txt";
-    auto output = "out.txt";
-    // =======================
 
     if (pid == -1) {
         throw std::runtime_error("Failed to fork");
@@ -88,37 +120,26 @@ void fork_exec ( const std::string & exec_name, const VecStr & arguments_ )
         waitpid(pid, &status, 0);
         last_exit_code = static_cast<EXIT_CODE>(status);
     } else {
-        //    ################
-        //            cout << "is valid: " << (fcntl(fd0, F_GETFD) != -1 || errno != EBADF) << endl;
-        if ( in )
-        {
-            int fd0 = open(input, O_RDONLY);
-            dup2(fd0, STDIN_FILENO);
-            close(fd0);
-        }
-        if ( out )
-        {
-            //            read & write for file's owner, read for group & others
-            int fd1 = creat(output, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-            dup2(fd1, STDOUT_FILENO);
-            close(fd1);
-        }
-        //      ##############
+
         VecStr arguments {};
+        Args args_struct {};
         try
         {
-            arguments = expand_arguments(arguments_);
+            arguments = expand_arguments(arguments_, args_struct);
         }
         catch ( std::exception & ex )
         {
             throw ex;
         }
+
+        if ( redirect(args_struct) != SUCCESS )
+            throw std::runtime_error("unable to locate/create file for input/output");
+
         arguments[0] = fs::path {exec_name}.filename().string();
         auto args = vecstr2char(arguments, true);
         auto env = vecstr2char(map2vecstr(env_vars), true);
 
         execve(exec_name.c_str(), args, env);
-        //        execl(exec_name.c_str(), "hexdump", NULL);
 
         delete[] args;
         delete[] env;
@@ -126,7 +147,7 @@ void fork_exec ( const std::string & exec_name, const VecStr & arguments_ )
 }
 
 
-int try_to_execute ( const std::vector<std::string> & command_opts )
+int try_to_execute ( VecStr & command_opts )
 {
     auto command_name = command_opts[0];
 

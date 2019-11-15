@@ -297,7 +297,7 @@ EXIT_CODE mEcho::run ( VecStr & parsed_line )
         VecStr values {};
         try
         {
-            values = expand_arguments(args.words);
+            values = expand_arguments(args.words, args);
         }
         catch ( std::runtime_error & re )
         {
