@@ -78,6 +78,7 @@ namespace Color {
         };
 }
 
+
 //class Exit : public std::runtime_error
 //    {
 //public:
@@ -90,7 +91,7 @@ namespace Color {
 //    };
 
 
-int try_to_execute ( VecStr & command_opts );
+int try_to_execute ( VecStr command_opts );
 //void fork_exec(const std::string & exec_name, const VecStr & arguments);
 
 

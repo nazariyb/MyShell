@@ -27,9 +27,10 @@ char ** vecstr2char ( VecStr vecStr, bool add_null )
 }
 
 
-std::vector<std::string> parse_line ( const std::string & commandline )
+VecStr parse_line ( const std::string & commandline )
 {
-    bool quotes_are_opened{false};
+    bool quotes_are_opened {false};
+    bool is_redirect {false};
     std::vector<std::string> args{};
     std::string buff{};
 
@@ -37,8 +38,19 @@ std::vector<std::string> parse_line ( const std::string & commandline )
     {
         if ( c == ' ' && buff.empty() && args.empty()) continue;
         if (c == '"') quotes_are_opened ^= static_cast<unsigned>(1);
+        if ( c == '>' || c == '<' ) is_redirect = true;
 
-        if ((c == ' ') && (!quotes_are_opened)) {
+        if ( c == '&' && is_redirect )
+        {
+            args.push_back(buff);
+            buff.clear();
+            buff += c;
+            is_redirect = false;
+            continue;
+        }
+
+        if (( c == ' ' ) && ( !quotes_are_opened ))
+        {
             args.push_back(buff);
             buff.clear();
             continue;
@@ -62,7 +74,9 @@ VecStr expand_arguments ( VecStr & arguments, Args & args )
         for ( auto & var: vars )
         {
             if ( var.empty() && variable_not_found )
-                throw std::runtime_error("Variable " + arg + " not found");
+                throw std::runtime_error("\nmyshell: Variable '"
+                                         + arg.substr(1)
+                                         + "' not found\n\n");
             expanded_args.push_back(var);
         }
     }
@@ -73,34 +87,56 @@ VecStr expand_arguments ( VecStr & arguments, Args & args )
 
 int redirect ( const Args & args )
 {
+    static std::map<std::string, int> stdioe
+            {
+                    {"&0", STDIN_FILENO},
+                    {"&1", STDOUT_FILENO},
+                    {"&2", STDERR_FILENO}
+            };
+
     int fd;
     if ( !args.input.empty())
     {
-        fd = open(args.input.c_str(), O_RDONLY);
-        if ( !( fcntl(fd, F_GETFD) != -1 || errno != EBADF )) return -1;
-        dup2(fd, STDIN_FILENO);
-        close(fd);
+        if ( stdioe.count(args.input))
+            dup2(stdioe[args.input], STDIN_FILENO);
+        else
+        {
+            fd = open(args.input.c_str(), O_RDONLY);
+            if ( !( fcntl(fd, F_GETFD) != -1 || errno != EBADF )) return -1;
+            dup2(fd, STDIN_FILENO);
+            close(fd);
+        }
     }
     if ( !args.output.empty())
     {
-        // read & write for file's owner, read for group & others
-        fd = creat(args.output.c_str(), S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-        if ( !( fcntl(fd, F_GETFD) != -1 || errno != EBADF )) return -1;
-        dup2(fd, STDOUT_FILENO);
-        close(fd);
+        if ( stdioe.count(args.output))
+            dup2(stdioe[args.output], STDOUT_FILENO);
+        else
+        {
+            // read & write for file's owner, read for group & others
+            fd = creat(args.output.c_str(), S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+            if ( !( fcntl(fd, F_GETFD) != -1 || errno != EBADF )) return -1;
+            dup2(fd, STDOUT_FILENO);
+            close(fd);
+        }
     }
     if ( !args.error_output.empty())
     {
-        // read & write for file's owner, read for group & others
-        if ( !( args.error_output == args.output ))
-        {
-            fd = creat(args.error_output.c_str(), S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-            if ( !( fcntl(fd, F_GETFD) != -1 || errno != EBADF )) return -1;
-            dup2(fd, STDERR_FILENO);
-            close(fd);
-        }
+        if ( stdioe.count(args.error_output))
+            dup2(stdioe[args.error_output], STDERR_FILENO);
         else
-            dup2(STDOUT_FILENO, STDERR_FILENO);
+        {
+            // read & write for file's owner, read for group & others
+            if ( args.error_output == args.output )
+                dup2(STDOUT_FILENO, STDERR_FILENO);
+            else
+            {
+                fd = creat(args.error_output.c_str(), S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+                if ( !( fcntl(fd, F_GETFD) != -1 || errno != EBADF )) return -1;
+                dup2(fd, STDERR_FILENO);
+                close(fd);
+            }
+        }
     }
     return SUCCESS;
 }
@@ -147,7 +183,7 @@ void fork_exec ( const std::string & exec_name, VecStr & arguments_ )
 }
 
 
-int try_to_execute ( VecStr & command_opts )
+int try_to_execute ( VecStr command_opts )
 {
     auto command_name = command_opts[0];
 
@@ -249,7 +285,6 @@ VecStr get_variable ( const std::string & word_ )
         }
         else
         {
-            std::cerr << "\nmyshell: Variable '" << word << "' not found.\n" << endl;
             variable_not_found = true;
             return {std::string {""}};
         }
@@ -258,22 +293,3 @@ VecStr get_variable ( const std::string & word_ )
     return ( list.empty()) ? VecStr {word_} : list;
 }
 
-
-void redirect ( bool in, bool out, const std::string & input, const std::string & output )
-{
-    if ( in )
-    { //if '<' char was found in string inputted by user
-        auto fd = open(input.c_str(), O_RDONLY, 0);
-        dup2(fd, STDIN_FILENO);
-        //        in = 0;
-        //        current_in = dup(0);  // Fix for symmetry with second paragraph
-    }
-
-    if ( out )
-    { //if '>' was found in string inputted by user
-        auto fd = creat(output.c_str(), 0644);
-        dup2(fd, STDOUT_FILENO);
-        //        out = 0;
-        //        current_out = dup(1);
-    }
-}

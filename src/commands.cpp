@@ -39,28 +39,36 @@ void Command::log ( const std::string & message, OUT_TYPE out_type, bool is_end,
 
 void Command::parse_redirections ( VecStr & vecStr, Args & args )
 {
-    auto arrow_ind = std::find(vecStr.begin(), vecStr.end(), "<");
+    static std::map<std::string, std::string *> arrows2args
+            {
+                    {"<",  &args.input},
+                    {">",  &args.output},
+                    {"2>", &args.error_output}
+            };
 
-    if ( arrow_ind != vecStr.end())
+    static std::map<std::string, const std::string *> stdioe
+            {
+                    {"&0", &args.input},
+                    {"&1", &args.output},
+                    {"&2", &args.error_output}
+            };
+
+    VecStr new_vec_str {};
+
+    for ( size_t i = 0; i < vecStr.size(); ++i )
     {
-        args.input = *( arrow_ind + 1 );
-        vecStr.erase(arrow_ind, arrow_ind + 2);
+        if ( arrows2args.count(vecStr[i]))
+        {
+            auto temp = arrows2args[vecStr[i]];
+            *temp = ( stdioe.count(vecStr[i + 1])) ? *( stdioe[vecStr[i + 1]] ) : vecStr[i + 1];
+            ++i;
+        }
+        else
+            new_vec_str.emplace_back(vecStr[i]);
     }
 
-    arrow_ind = std::find(vecStr.begin(), vecStr.end(), ">");
+    vecStr = new_vec_str;
 
-    if ( arrow_ind != vecStr.end())
-    {
-        args.output = *( arrow_ind + 1 );
-        vecStr.erase(arrow_ind, arrow_ind + 2);
-    }
-
-    arrow_ind = std::find(vecStr.begin(), vecStr.end(), "2>");
-    if ( arrow_ind != vecStr.end())
-    {
-        args.error_output = *( arrow_ind + 1 );
-        vecStr.erase(arrow_ind, arrow_ind + 2);
-    }
 }
 
 
@@ -301,7 +309,7 @@ EXIT_CODE mEcho::run ( VecStr & parsed_line )
         }
         catch ( std::runtime_error & re )
         {
-            // std::cerr << re.what() << endl;
+            log(re.what(), OUT_TYPE::ERROR, true, args.error_output);
             return VARIABLE_NOT_FOUND;
         }
         catch ( std::exception & ex )
