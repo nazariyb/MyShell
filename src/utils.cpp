@@ -74,6 +74,12 @@ void fork_exec ( const std::string & exec_name, const VecStr & arguments_ )
     //    pid_t parent = getpid();
     pid_t pid = fork();
 
+    // =======================
+    auto in = true;
+    auto out = true;
+    auto input = "inp.txt";
+    auto output = "out.txt";
+    // =======================
 
     if (pid == -1) {
         throw std::runtime_error("Failed to fork");
@@ -82,6 +88,22 @@ void fork_exec ( const std::string & exec_name, const VecStr & arguments_ )
         waitpid(pid, &status, 0);
         last_exit_code = static_cast<EXIT_CODE>(status);
     } else {
+        //    ################
+        //            cout << "is valid: " << (fcntl(fd0, F_GETFD) != -1 || errno != EBADF) << endl;
+        if ( in )
+        {
+            int fd0 = open(input, O_RDONLY);
+            dup2(fd0, STDIN_FILENO);
+            close(fd0);
+        }
+        if ( out )
+        {
+            //            read & write for file's owner, read for group & others
+            int fd1 = creat(output, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+            dup2(fd1, STDOUT_FILENO);
+            close(fd1);
+        }
+        //      ##############
         VecStr arguments {};
         try
         {
@@ -96,6 +118,8 @@ void fork_exec ( const std::string & exec_name, const VecStr & arguments_ )
         auto env = vecstr2char(map2vecstr(env_vars), true);
 
         execve(exec_name.c_str(), args, env);
+        //        execl(exec_name.c_str(), "hexdump", NULL);
+
         delete[] args;
         delete[] env;
     }

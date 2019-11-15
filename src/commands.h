@@ -2,6 +2,7 @@
 #define MYSHELL_COMMANDS_H
 
 #include "utils.h"
+#include <boost/program_options.hpp>
 
 
 using OUT_TYPE = enum OUT_TYPE
@@ -11,9 +12,13 @@ using OUT_TYPE = enum OUT_TYPE
 
 struct Command
     {
-    virtual EXIT_CODE run ( const VecStr & parsed_line ) = 0;
-    virtual Args parse_arguments ( const VecStr & vecStr );
+    virtual EXIT_CODE run ( VecStr & parsed_line ) = 0;
 
+    Args base_parsing ( VecStr & vecStr, od & desc, po::variables_map & vm, const VecStr & pos_args );
+
+    virtual Args parse_arguments ( VecStr & vecStr ) = 0;
+
+    static void parse_redirections ( VecStr & vecStr, Args & args );
     std::ofstream out_file;
 
     void log ( const std::string & message, OUT_TYPE out_type, bool is_end );
@@ -27,47 +32,49 @@ private:
 
 struct mErrno : public Command
     {
-    EXIT_CODE run ( const VecStr & parsed_line ) override;
-    //    void parse_arguments(const VecStr& vecStr, Args & args);
+    EXIT_CODE run ( VecStr & parsed_line ) override;
+
+    Args parse_arguments ( VecStr & vecStr ) override;
     };
 
 
 struct mPwd : public Command
     {
-    EXIT_CODE run ( const VecStr & parsed_line ) override;
-    //    void parse_arguments(const VecStr& vecStr, Args & args);
+    EXIT_CODE run ( VecStr & parsed_line ) override;
+
+    Args parse_arguments ( VecStr & vecStr ) override;
     };
 
 
 struct mCd : public Command
     {
-    EXIT_CODE run ( const VecStr & parsed_line ) override;
+    EXIT_CODE run ( VecStr & parsed_line ) override;
 
-    Args parse_arguments ( const VecStr & vecStr ) override;
+    Args parse_arguments ( VecStr & vecStr ) override;
     };
 
 
 struct mExit : public Command
     {
-    EXIT_CODE run ( const VecStr & parsed_line ) override;
+    EXIT_CODE run ( VecStr & parsed_line ) override;
 
-    Args parse_arguments ( const VecStr & vecStr ) override;
+    Args parse_arguments ( VecStr & vecStr ) override;
     };
 
 
 struct mEcho : public Command
     {
-    EXIT_CODE run ( const VecStr & parsed_line ) override;
+    EXIT_CODE run ( VecStr & parsed_line ) override;
 
-    Args parse_arguments ( const VecStr & vecStr ) override;
+    Args parse_arguments ( VecStr & vecStr ) override;
     };
 
 
 struct mExport : public Command
     {
-    EXIT_CODE run ( const VecStr & parsed_line ) override;
+    EXIT_CODE run ( VecStr & parsed_line ) override;
 
-    Args parse_arguments ( const VecStr & vecStr ) override;
+    Args parse_arguments ( VecStr & vecStr ) override;
     };
 
 

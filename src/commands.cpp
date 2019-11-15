@@ -36,22 +36,50 @@ void Command::log ( const std::string & message, OUT_TYPE out_type, bool is_end,
 
 }
 
-Args Command::parse_arguments ( const VecStr & vecStr )
+
+void Command::parse_redirections ( VecStr & vecStr, Args & args )
+{
+    auto arrow_ind = std::find(vecStr.begin(), vecStr.end(), "<");
+
+    if ( arrow_ind != vecStr.end())
+    {
+        args.input = *( arrow_ind + 1 );
+        vecStr.erase(arrow_ind, arrow_ind + 2);
+    }
+
+    arrow_ind = std::find(vecStr.begin(), vecStr.end(), ">");
+
+    if ( arrow_ind != vecStr.end())
+    {
+        args.output = *( arrow_ind + 1 );
+        vecStr.erase(arrow_ind, arrow_ind + 2);
+    }
+
+    arrow_ind = std::find(vecStr.begin(), vecStr.end(), "2>");
+    if ( arrow_ind != vecStr.end())
+    {
+        args.error_output = *( arrow_ind + 1 );
+        vecStr.erase(arrow_ind, arrow_ind + 2);
+    }
+}
+
+
+Args Command::base_parsing ( VecStr & vecStr, od & desc, po::variables_map & vm, const VecStr & pos_args )
 {
     Args args {};
+
+    parse_redirections(vecStr, args);
+
     auto argv = vecstr2char(vecStr, false);
     try
     {
-        od desc {"Options"};
         desc.add_options()
-                ("help,h", po::bool_switch(), "Help screen")
-        //                (">", po::value<std::string>(), "Help screen")
-        //                ("2>", po::value<std::string>(), "Help screen");
+                ("help,h", po::bool_switch(), "Help screen");
 
 
         po::positional_options_description pos_desc;
-        //        pos_desc.add(">", -1);
-        //        pos_desc.add("2>", -1);
+        for ( auto & pos_arg: pos_args )
+            pos_desc.add(pos_arg.c_str(), -1);
 
         po::command_line_parser parser {static_cast<int>(vecStr.size()), argv};
         auto parsed_options = parser
@@ -59,7 +87,6 @@ Args Command::parse_arguments ( const VecStr & vecStr )
                 .positional(pos_desc)
                 .run();
 
-        po::variables_map vm;
         store(parsed_options, vm);
         notify(vm);
 
@@ -68,7 +95,7 @@ Args Command::parse_arguments ( const VecStr & vecStr )
     catch ( const po::error & ex )
     {
         log(std::string {ex.what()} + '\n',
-            OUT_TYPE::ERROR, true, "out.txt");
+            OUT_TYPE::ERROR, true, args.error_output);
         delete[]( argv );
         throw ex;
     }
@@ -77,197 +104,88 @@ Args Command::parse_arguments ( const VecStr & vecStr )
 }
 
 
-Args mCd::parse_arguments ( const VecStr & vecStr )
+Args mErrno::parse_arguments ( VecStr & vecStr )
 {
-    Args args {};
-    auto argv = vecstr2char(vecStr, false);
-    try
-    {
-        od desc {"Options"};
-        desc.add_options()
-                ("help,h", po::bool_switch(), "Help screen")
-                ("path", po::value<std::string>(), "Help screen")
-        //                (">", po::value<std::string>(), "Help screen")
-        //                ("2>", po::value<std::string>(), "Help screen");
-
-        po::positional_options_description pos_desc;
-        pos_desc.add("path", -1);
-        //        pos_desc.add(">", -1);
-        //        pos_desc.add("2>", -1);
-
-
-
-        po::command_line_parser parser {static_cast<int>(vecStr.size()), argv};
-        auto parsed_options = parser
-                .options(desc)
-                .positional(pos_desc)
-                .run();
-
-        po::variables_map vm;
-        store(parsed_options, vm);
-        notify(vm);
-
-        args.help = vm["help"].as<bool>();
-        if ( !vm.count("path")) throw std::invalid_argument("path is not specified!");
-        args.path = vm["path"].as<std::string>();
-
-    }
-    catch ( const po::error & ex )
-    {
-        log(std::string {ex.what()} + '\n',
-            OUT_TYPE::ERROR, true, "out.txt");
-        delete[]( argv );
-        throw ex;
-    }
-    delete[]( argv );
-    return args;
+    od desc {"Options"};
+    po::variables_map vm;
+    return base_parsing(vecStr, desc, vm, {});
 }
 
 
-Args mExit::parse_arguments ( const VecStr & vecStr )
+Args mPwd::parse_arguments ( VecStr & vecStr )
 {
-    Args args {};
-    auto argv = vecstr2char(vecStr, false);
-    try
-    {
-        od desc {"Options"};
-        desc.add_options()
-                ("help,h", po::bool_switch(), "Help screen")
-                ("exit_code", po::value<int>(), "Help screen")
-        //                (">", po::value<std::string>(), "Help screen")
-        //                ("2>", po::value<std::string>(), "Help screen");
-
-
-        po::positional_options_description pos_desc;
-        pos_desc.add("exit_code", -1);
-        //        pos_desc.add(">", -1);
-        //        pos_desc.add("2>", -1);
-
-        po::command_line_parser parser {static_cast<int>(vecStr.size()), argv};
-        auto parsed_options = parser
-                .options(desc)
-                .positional(pos_desc)
-                .allow_unregistered()
-                .run();
-
-        po::variables_map vm;
-        store(parsed_options, vm);
-        notify(vm);
-
-        args.help = vm["help"].as<bool>();
-
-        if ( vm.count("exit_code"))
-            args.exit_code = vm["exit_code"].as<int>();
-
-    }
-    catch ( const po::error & ex )
-    {
-        log(std::string {ex.what()} + '\n',
-            OUT_TYPE::ERROR, true, "out.txt");
-        delete[]( argv );
-        throw ex;
-    }
-    delete[]( argv );
-    return args;
+    od desc {"Options"};
+    po::variables_map vm;
+    return base_parsing(vecStr, desc, vm, {});
 }
 
 
-Args mEcho::parse_arguments ( const VecStr & vecStr )
+Args mCd::parse_arguments ( VecStr & vecStr )
 {
-    Args args {};
-    auto argv = vecstr2char(vecStr, false);
+    od desc {"Options"};
+    desc.add_options()
+            ("path", po::value<std::string>(), "Help screen");
 
-    try
-    {
-        od desc {"Options"};
-        desc.add_options()
-                ("words", po::value<std::vector<std::string>>()->
-                        multitoken()->zero_tokens()->composing(), "Help screen");
-        //                (">", po::value<std::string>(), "Help screen")
-        //                ("2>", po::value<std::string>(), "Help screen");
+    po::variables_map vm;
+    auto args = base_parsing(vecStr, desc, vm, {"path"});
 
+    if ( !vm.count("path")) throw std::invalid_argument("path is not specified!");
+    args.path = vm["path"].as<std::string>();
 
-        po::positional_options_description pos_desc;
-        pos_desc.add("words", -1);
-        //        pos_desc.add(">", -1);
-        //        pos_desc.add("2>", -1);
-
-
-        po::command_line_parser parser {static_cast<int>(vecStr.size()), argv};
-        auto parsed_options = parser
-                .options(desc)
-                .positional(pos_desc)
-                .allow_unregistered()
-                .run();
-
-
-        po::variables_map vm;
-        store(parsed_options, vm);
-        notify(vm);
-
-        if ( vm.count("words"))
-            args.words = vm["words"].as<VecStr>();
-
-    }
-    catch ( const po::error & ex )
-    {
-        log(std::string {ex.what()} + '\n',
-            OUT_TYPE::ERROR, true, "out.txt");
-        delete[]( argv );
-        throw ex;
-    }
-    delete[]( argv );
     return args;
 }
 
 
-Args mExport::parse_arguments ( const VecStr & vecStr )
+Args mExit::parse_arguments ( VecStr & vecStr )
 {
-    Args args {};
-    auto argv = vecstr2char(vecStr, false);
+    od desc {"Options"};
+    desc.add_options()
+            ("exit_code", po::value<int>(), "Help screen");
 
-    try
-    {
-        od desc {"Options"};
-        desc.add_options()
-                ("var_name", po::value<std::string>(), "Help screen")
-        //                (">", po::value<std::string>(), "Help screen")
-        //                ("2>", po::value<std::string>(), "Help screen");
+    po::variables_map vm;
+    auto args = base_parsing(vecStr, desc, vm, {"exit_code"});
 
+    if ( vm.count("exit_code"))
+        args.exit_code = vm["exit_code"].as<int>();
 
-        po::positional_options_description pos_desc;
-        pos_desc.add("var_name", -1);
-        //        pos_desc.add(">", -1);
-        //        pos_desc.add("2>", -1);
-
-        po::command_line_parser parser {static_cast<int>(vecStr.size()), argv};
-        auto parsed_options = parser
-                .options(desc)
-                .positional(pos_desc)
-                .run();
-
-
-        po::variables_map vm;
-        store(parsed_options, vm);
-        notify(vm);
-
-        if ( vm.count("var_name"))
-            args.var_name = vm["var_name"].as<std::string>();
-
-    }
-    catch ( const po::error & ex )
-    {
-        log(std::string {ex.what()} + '\n',
-            OUT_TYPE::ERROR, true, "out.txt");
-        delete[]( argv );
-        throw ex;
-    }
-    delete[]( argv );
     return args;
 }
 
 
-EXIT_CODE mErrno::run ( const VecStr & parsed_line )
+Args mEcho::parse_arguments ( VecStr & vecStr )
+{
+    od desc {"Options"};
+    desc.add_options()
+            ("words", po::value<std::vector<std::string>>()->
+                    multitoken()->zero_tokens()->composing(), "Help screen");
+
+    po::variables_map vm;
+    auto args = base_parsing(vecStr, desc, vm, {"words"});
+
+    if ( vm.count("words"))
+        args.words = vm["words"].as<VecStr>();
+
+    return args;
+}
+
+
+Args mExport::parse_arguments ( VecStr & vecStr )
+{
+    od desc {"Options"};
+    desc.add_options()
+            ("var_name", po::value<std::string>(), "Help screen");
+
+    po::variables_map vm;
+    auto args = base_parsing(vecStr, desc, vm, {"var_name"});
+
+    if ( vm.count("var_name"))
+        args.var_name = vm["var_name"].as<std::string>();
+
+    return args;
+}
+
+
+EXIT_CODE mErrno::run ( VecStr & parsed_line )
 {
     try
     {
@@ -277,11 +195,11 @@ EXIT_CODE mErrno::run ( const VecStr & parsed_line )
             log("merrno [-h|--help] – вивести код завершення останньої програми чи команди\n"
                     "Повертає нуль, якщо ще жодна програма не виконувалася.\n"
                 "Після неї самої merrno повертає нуль, крім випадку, коли було передано невірні опції.\n",
-                OUT_TYPE::OUT, true, "out.txt");
+                OUT_TYPE::OUT, true, args.output);
             return HELP_EXIT;
         }
         log(std::to_string(last_exit_code) + "\n",
-            OUT_TYPE::OUT, true, "out.txt");
+            OUT_TYPE::OUT, true, args.output);
     }
     catch ( std::exception & ex )
     {
@@ -292,19 +210,20 @@ EXIT_CODE mErrno::run ( const VecStr & parsed_line )
 }
 
 
-EXIT_CODE mPwd::run ( const VecStr & parsed_line )
+EXIT_CODE mPwd::run ( VecStr & parsed_line )
 {
+    Args args {};
     try
     {
-        auto args = parse_arguments(parsed_line);
+        args = parse_arguments(parsed_line);
         if ( args.help )
         {
             log("mpwd [-h|--help] – вивести поточний шлях\n"
                 "Після неї merrno повертає нуль, крім випадку, коли було передано невірні опції.",
-                OUT_TYPE::OUT, true, "out.txt");
+                OUT_TYPE::OUT, true, args.output);
             return HELP_EXIT;
         }
-        log(fs::current_path().string(), OUT_TYPE::OUT, true, "out.txt");
+        log(fs::current_path().string() + "\n", OUT_TYPE::OUT, true, args.output);
     }
     catch ( std::exception & ex )
     {
@@ -314,16 +233,17 @@ EXIT_CODE mPwd::run ( const VecStr & parsed_line )
 }
 
 
-EXIT_CODE mCd::run ( const VecStr & parsed_line )
+EXIT_CODE mCd::run ( VecStr & parsed_line )
 {
+    Args args {};
     try
     {
-        auto args = parse_arguments(parsed_line);
+        args = parse_arguments(parsed_line);
         if ( args.help )
         {
             log("mcd <path> [-h|--help] -- перейти до шляху <path>\n"
                 "Після неї merrno повертає нуль, якщо вдалося перейти в нову директорію, не нуль -- якщо не вдалося або було передано невірні опції.\n",
-                OUT_TYPE::OUT, true, "out.txt");
+                OUT_TYPE::OUT, true, args.output);
             return HELP_EXIT;
         }
         auto value = get_variable(args.path)[0];
@@ -334,21 +254,21 @@ EXIT_CODE mCd::run ( const VecStr & parsed_line )
     catch ( std::exception & ex )
     {
         log("myshell: " + std::string {ex.what()} + "\n",
-            OUT_TYPE::ERROR, true, "out.txt");
+            OUT_TYPE::ERROR, true, args.error_output);
         return FAILURE;
     }
     return SUCCESS;
 }
 
 
-EXIT_CODE mExit::run ( const VecStr & parsed_line )
+EXIT_CODE mExit::run ( VecStr & parsed_line )
 {
     auto args = parse_arguments(parsed_line);
     if ( args.help )
     {
         log("mexit [код завершення] [-h|--help]  – вийnb із myshell\n"
             "Якщо не передано код завершення -- вийде із кодом 0.\n",
-            OUT_TYPE::OUT, true, "out.txt");
+            OUT_TYPE::OUT, true, args.output);
         return HELP_EXIT;
     }
     shell_exit_code = args.exit_code;
@@ -357,7 +277,7 @@ EXIT_CODE mExit::run ( const VecStr & parsed_line )
 }
 
 
-EXIT_CODE mEcho::run ( const VecStr & parsed_line )
+EXIT_CODE mEcho::run ( VecStr & parsed_line )
 {
     auto args = parse_arguments(parsed_line);
 
@@ -368,7 +288,7 @@ EXIT_CODE mEcho::run ( const VecStr & parsed_line )
                 "Якщо аргумент починається не з $ -- просто виводить його на консоль.\n"
                 "Якщо з $ -- шукає відповідну змінну та виводить її вміст. Якщо такої змінної не існує -- не виводить нічого.\n"
             "Після неї merrno повертає нуль.\n",
-            OUT_TYPE::OUT, true);
+            OUT_TYPE::OUT, true, args.output);
         return HELP_EXIT;
     }
 
@@ -386,19 +306,19 @@ EXIT_CODE mEcho::run ( const VecStr & parsed_line )
         }
         catch ( std::exception & ex )
         {
-            log(ex.what(), OUT_TYPE::ERROR, true);
+            log(ex.what(), OUT_TYPE::ERROR, true, args.error_output);
             return FAILURE;
         }
 
         for ( auto & value : values )
-            log(value + " ", OUT_TYPE::OUT, false, "out.txt");
+            log(value + " ", OUT_TYPE::OUT, false, args.output);
     }
-    log("\n", OUT_TYPE::OUT, true, "out.txt");
+    log("\n", OUT_TYPE::OUT, true, args.output);
     return SUCCESS;
 }
 
 
-EXIT_CODE mExport::run ( const VecStr & parsed_line )
+EXIT_CODE mExport::run ( VecStr & parsed_line )
 {
     auto args = parse_arguments(parsed_line);
 
@@ -409,7 +329,7 @@ EXIT_CODE mExport::run ( const VecStr & parsed_line )
                 "Якщо змінна не існувала, і не передано \"=VAL\", створюється як порожня.\n"
                 "Якщо передано \"=VAL\", їй присвоюється відповідне значення. За потреби -- змінна створюється.\n"
             "Після неї merrno повертає нуль, якщо створити змінну вдалося, не нуль -- якщо ні.\n",
-            OUT_TYPE::OUT, true);
+            OUT_TYPE::OUT, true, args.output);
         return HELP_EXIT;
     }
 

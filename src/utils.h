@@ -38,6 +38,9 @@ using Args = struct Args
     int exit_code {0};
     VecStr words {};
     std::string var_name {};
+    std::string input {};
+    std::string output {};
+    std::string error_output {};
     };
 
 char ** vecstr2char ( VecStr vecStr, bool add_null );
