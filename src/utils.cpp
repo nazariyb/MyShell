@@ -7,10 +7,13 @@
 #include <map>
 #include <fnmatch.h>
 #include <fcntl.h>
+#include <sys/mman.h>
 
 #include "utils.h"
 #include "commands.h"
 
+
+bool run_in_bg {false};
 
 char ** vecstr2char ( VecStr vecStr, bool add_null )
 {
@@ -27,46 +30,75 @@ char ** vecstr2char ( VecStr vecStr, bool add_null )
 }
 
 
-VecStr parse_line ( const std::string & commandline )
+VecVecStr parse_line ( const std::string & commandline )
 {
     bool quotes_are_opened {false};
+    bool brackets_are_opened {false};
     bool is_redirect {false};
-    std::vector<std::string> args{};
+    bool is_dollar {false};
+
+    VecVecStr args {};
     std::string buff{};
 
+    args.emplace_back();
     for ( auto & c: commandline )
     {
-        if ( c == ' ' && buff.empty() && args.empty()) continue;
+        if ( c == ' ' && buff.empty() && args.back().empty()) continue;
         if (c == '"') quotes_are_opened ^= static_cast<unsigned>(1);
         if ( c == '>' || c == '<' ) is_redirect = true;
+        if ( c == '$' ) is_dollar = true;
+
+        if ( c == '(' && is_dollar ) brackets_are_opened = true;
+
+        if ( c == ')' && brackets_are_opened )
+        {
+            brackets_are_opened = false;
+            is_dollar = false;
+        }
 
         if ( c == '&' && is_redirect )
         {
-            args.push_back(buff);
+            args.back().push_back(buff);
             buff.clear();
             buff += c;
             is_redirect = false;
             continue;
         }
 
-        if (( c == ' ' ) && ( !quotes_are_opened ))
+        if ( c == '&' )
         {
-            args.push_back(buff);
+            run_in_bg = true;
+            return args;
+        }
+
+        if (( c == ' ' ) && ( !quotes_are_opened ) && ( !brackets_are_opened ))
+        {
+            args.back().push_back(buff);
+            buff.clear();
+            is_redirect = false;
+            continue;
+        }
+
+        if (( c == '|' ) && ( !quotes_are_opened ) && ( !brackets_are_opened ))
+        {
+            args.emplace_back();
             buff.clear();
             continue;
         }
+
         buff += c;
     }
-    args.push_back(buff);
+    args.back().push_back(buff);
     return args;
 }
 
 
-VecStr expand_arguments ( VecStr & arguments, Args & args )
+VecStr expand_arguments ( VecStr & arguments, Args & args, bool is_parsed = false )
 {
     VecStr expanded_args {};
 
-    Command::parse_redirections(arguments, args);
+    if ( !is_parsed )
+        Command::parse_redirections(arguments, args);
 
     for ( auto & arg: arguments )
     {
@@ -107,6 +139,8 @@ int redirect ( const Args & args )
             close(fd);
         }
     }
+    //    else if (run_in_bg)
+    //        close(STDIN_FILENO);
     if ( !args.output.empty())
     {
         if ( stdioe.count(args.output))
@@ -120,6 +154,8 @@ int redirect ( const Args & args )
             close(fd);
         }
     }
+    //    else if (run_in_bg)
+    //        close(STDOUT_FILENO);
     if ( !args.error_output.empty())
     {
         if ( stdioe.count(args.error_output))
@@ -138,6 +174,9 @@ int redirect ( const Args & args )
             }
         }
     }
+    //    else if (run_in_bg)
+    //        close(STDERR_FILENO);
+
     return SUCCESS;
 }
 
@@ -149,14 +188,18 @@ void fork_exec ( const std::string & exec_name, VecStr & arguments_ )
     pid_t pid = fork();
 
 
-    if (pid == -1) {
+    if ( pid == -1 )
         throw std::runtime_error("Failed to fork");
-    } else if (pid > 0) {
+    else if ( pid > 0 )
+    {
+        if ( run_in_bg )
+            return;
         int status;
         waitpid(pid, &status, 0);
         last_exit_code = static_cast<EXIT_CODE>(status);
-    } else {
-
+    }
+    else
+    {
         VecStr arguments {};
         Args args_struct {};
         try
@@ -186,7 +229,6 @@ void fork_exec ( const std::string & exec_name, VecStr & arguments_ )
 int try_to_execute ( VecStr command_opts )
 {
     auto command_name = command_opts[0];
-
     try
     {
         for ( auto & loc: PATH )
@@ -259,9 +301,47 @@ std::vector<std::string> map2vecstr ( const MapStrStr & vars_map )
 int try_add_var ( const std::string & pair )
 {
     auto delim_ind = pair.find('=');
-
     if ( delim_ind == std::string::npos ) return NOT_VALID_VARIABLE;
-    else vars[pair.substr(0, delim_ind)] = pair.substr(delim_ind + 1, std::string::npos);
+    else
+    {
+        auto word = pair.substr(delim_ind + 1, std::string::npos);
+        if ( boost::starts_with(word, "$(") && boost::ends_with(word, ")"))
+        {
+            auto parsed_line = parse_line(word.substr(2, word.size() - 3));
+            if ( parsed_line.size() > 1 )
+            {
+                parsed_line.back().emplace_back(">");
+                parsed_line.back().emplace_back(".var");
+                try_pipe(parsed_line, commands);
+            }
+            else
+            {
+                auto command = parsed_line[0];
+                command.emplace_back(">");
+                command.emplace_back(".var");
+                if ( !commands.count(command[0]))
+                {
+                    if ( try_to_execute(command) != SUCCESS )
+                        //                            break;
+                        //                        else if ( command.size() == 1 && try_add_var(command[0]) == SUCCESS )
+                        //                            break;
+
+                        std::cerr << "\nmyshell: Command '" << command[0] << "' not found.\n" << endl;
+                }
+                else
+                {
+                    last_exit_code = commands[command[0]]->run(command);
+                }
+            }
+            auto var_fd = open(".var", O_RDONLY);
+            auto len = lseek(var_fd, 0, SEEK_END);
+            void * data = mmap(nullptr, len, PROT_READ, MAP_PRIVATE, var_fd, 0);
+            vars[pair.substr(0, delim_ind)] = std::string {( char * ) data};
+            close(var_fd);
+        }
+        else
+            vars[pair.substr(0, delim_ind)] = word;
+    }
 
     return SUCCESS;
 }
@@ -293,3 +373,107 @@ VecStr get_variable ( const std::string & word_ )
     return ( list.empty()) ? VecStr {word_} : list;
 }
 
+
+int try_pipe ( VecVecStr & commands, std::map<std::string, Command *> & commands_map )
+{
+    auto numPipes = commands.size();
+
+    int status;
+    size_t i = 0;
+    pid_t pid;
+
+    int pipe_fds[2 * numPipes];
+
+    for ( i = 0; i < ( numPipes ); i++ )
+    {
+        if ( pipe(pipe_fds + i * 2) < 0 )
+        {
+            perror("couldn't pipe");
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    for ( size_t i = 0, j = 0; i < numPipes; ++i )
+    {
+        pid = fork();
+        if ( pid == 0 )
+        {
+            if ( i < numPipes - 1 )
+            {
+                if ( dup2(pipe_fds[j + 1], 1) < 0 )
+                {
+                    perror("dup2");
+                    exit(EXIT_FAILURE);
+                }
+            }
+
+            if ( j > 0 )
+            {
+                if ( dup2(pipe_fds[j - 2], 0) < 0 )
+                {
+                    perror(" dup2");
+                    exit(EXIT_FAILURE);
+                }
+            }
+
+
+            for ( size_t k = 0; k < 2 * numPipes; ++k )
+            {
+                close(pipe_fds[k]);
+            }
+            //             ==================
+            VecStr arguments {};
+            Args args_struct {};
+            try
+            {
+                arguments = expand_arguments(commands[i], args_struct);
+            }
+            catch ( std::exception & ex )
+            {
+                throw ex;
+            }
+
+            if ( redirect(args_struct) != SUCCESS )
+                throw std::runtime_error("unable to locate/create file for input/output");
+
+            auto command_name = commands[i][0];
+            std::string exec_name {};
+            for ( auto & loc: PATH )
+            {
+                if ( boost::filesystem::exists(loc + command_name) & ( !access(( loc + command_name ).c_str(), X_OK)))
+                {
+                    exec_name = loc + command_name, commands[i];
+                    break;
+                }
+            }
+            if ( exec_name.empty() && !access(command_name.c_str(), X_OK))
+            {
+                exec_name = command_name;
+            }
+
+            arguments[0] = fs::path {exec_name}.filename().string();
+            auto args = vecstr2char(arguments, true);
+            auto env = vecstr2char(map2vecstr(env_vars), true);
+
+            execve(exec_name.c_str(), args, env);
+
+            delete[] args;
+            delete[] env;
+        }
+        else if ( pid < 0 )
+        {
+            perror("error");
+            exit(EXIT_FAILURE);
+        }
+
+        j += 2;
+
+    }
+
+    for ( i = 0; i < 2 * numPipes; i++ )
+        close(pipe_fds[i]);
+
+    if ( !run_in_bg )
+        for ( i = 0; i < numPipes + 1; i++ )
+            wait(&status);
+}

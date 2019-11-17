@@ -13,6 +13,7 @@ namespace po = boost::program_options;
 using od = po::options_description;
 
 using VecStr = std::vector<std::string>;
+using VecVecStr = std::vector<std::vector<std::string>>;
 using MapStrStr = std::map<std::string, std::string>;
 
 using std::cout;
@@ -30,6 +31,7 @@ extern VecStr PATH;
 extern MapStrStr vars;
 extern MapStrStr env_vars;
 extern bool variable_not_found;
+extern bool run_in_bg;
 
 using Args = struct Args
     {
@@ -46,7 +48,7 @@ using Args = struct Args
 char ** vecstr2char ( VecStr vecStr, bool add_null );
 
 
-std::vector<std::string> parse_line ( const std::string & commandline );
+VecVecStr parse_line ( const std::string & commandline );
 
 namespace Color {
     enum Code
@@ -78,7 +80,6 @@ namespace Color {
         };
 }
 
-
 //class Exit : public std::runtime_error
 //    {
 //public:
@@ -94,7 +95,6 @@ namespace Color {
 int try_to_execute ( VecStr command_opts );
 //void fork_exec(const std::string & exec_name, const VecStr & arguments);
 
-
 std::vector<std::string> open_wildcard ( const std::string & path );
 
 std::vector<std::string> map2vecstr ( const MapStrStr & vars_map );
@@ -103,6 +103,6 @@ int try_add_var ( const std::string & pair );
 
 VecStr get_variable ( const std::string & word_ );
 
-VecStr expand_arguments ( VecStr & arguments, Args & args );
+VecStr expand_arguments ( VecStr & arguments, Args & args, bool is_parse );
 
 #endif //MYSHELL_UTILS_H

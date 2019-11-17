@@ -78,4 +78,16 @@ struct mExport : public Command
     };
 
 
+struct mDot : public Command
+    {
+    EXIT_CODE run ( VecStr & parsed_line ) override;
+
+    Args parse_arguments ( VecStr & vecStr ) override;
+    };
+
+
+int try_pipe ( VecVecStr & commands, std::map<std::string, Command *> & commands_map );
+
+extern std::map<std::string, Command *> commands;
+
 #endif //MYSHELL_COMMANDS_H
