@@ -63,6 +63,8 @@ ADD_CUSTOM_COMMAND(
 # MYCP
 add_executable(mycp
         scripts/mycp/mycp.cpp
+        scripts/mycp/utils.cpp
+        scripts/mycp/utils.h
         )
 
 target_link_libraries(mycp
