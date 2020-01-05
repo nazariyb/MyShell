@@ -93,6 +93,8 @@ ADD_CUSTOM_COMMAND(
 # MYMKDIR
 add_executable(mymkdir
         scripts/mymkdir/mymkdir.cpp
+        scripts/mymkdir/utils.cpp
+        scripts/mymkdir/utils.h
         )
 
 target_link_libraries(mymkdir
