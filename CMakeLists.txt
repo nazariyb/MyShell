@@ -127,6 +127,8 @@ ADD_CUSTOM_COMMAND(
 # MYRM
 add_executable(myrm
         scripts/myrm/myrm.cpp
+        scripts/myrm/utils.cpp
+        scripts/myrm/utils.h
         )
 
 target_link_libraries(myrm
