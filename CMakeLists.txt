@@ -112,6 +112,8 @@ ADD_CUSTOM_COMMAND(
 # MYMV
 add_executable(mymv
         scripts/mymv/mymv.cpp
+        scripts/mymv/utils.cpp
+        scripts/mymv/utils.h
         )
 
 target_link_libraries(mymv
