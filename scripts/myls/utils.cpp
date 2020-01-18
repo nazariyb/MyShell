@@ -246,11 +246,19 @@ void sort_files ( MapVecFile & files, const Args & args )
             {'N', [args] ( const File & a, const File & b ) { return ( a.name.compare(b.name) < 0 ); }},
 
             {'D', [args] ( const File & a, const File & b ) {
-                return ( a.type.type_name == DIRECTORY && b.type.type_name != DIRECTORY );
+                return (
+                        ( a.type.type_name == DIRECTORY && b.type.type_name == DIRECTORY )
+                        ? a.name.compare(b.name) < 0
+                        : a.type.type_name == DIRECTORY && b.type.type_name != DIRECTORY
+                );
             }},
 
             {'s', [args] ( const File & a, const File & b ) {
-                return ( is_special_file(a) && !is_special_file(b));
+                return (
+                        ( is_special_file(a) && is_special_file(b))
+                        ? a.name.compare(b.name) < 0
+                        : is_special_file(a) && !is_special_file(b)
+                );
             }}
     };
 
