@@ -219,11 +219,17 @@ void sort_files ( MapVecFile & files, const Args & args )
                 return (
                         ( a.size != b.size )
                         ? a.size < b.size
-                        : a.full_time > b.full_time
+                        : a.name.compare(b.name) < 0
                 );
             }},
 
-            {'t', [args] ( const File & a, const File & b ) { return ( a.full_time > b.full_time ); }},
+            {'t', [args] ( const File & a, const File & b ) {
+                return (
+                        ( a.full_time != b.full_time )
+                        ? a.full_time > b.full_time
+                        : a.name.compare(b.name) < 0
+                );
+            }},
 
             {'X', [args] ( const File & a, const File & b ) {
                 return (
