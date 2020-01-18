@@ -9,7 +9,9 @@
 #include "utils.h"
 #include "table_printer/table_printer.h"
 
+
 int exit_code {SUCCESS};
+
 
 Args parse_arguments ( int argc, char * argv[] )
 {
@@ -122,16 +124,16 @@ boost::uintmax_t directory_size ( const fs::path & dir_path )
     return 0;
 #endif
 
-//  Logic does not work here :(
-//    boost::uintmax_t dir_size {0};
-//
-//    for ( fs::recursive_directory_iterator it(dir_path);
-//          it != fs::recursive_directory_iterator();
-//          ++it )
-//        if ( !fs::is_directory(*it))
-//            dir_size += fs::file_size(*it);
-//
-//    return dir_size;
+    //  Logic does not work here :(
+    //    boost::uintmax_t dir_size {0};
+    //
+    //    for ( fs::recursive_directory_iterator it(dir_path);
+    //          it != fs::recursive_directory_iterator();
+    //          ++it )
+    //        if ( !fs::is_directory(*it))
+    //            dir_size += fs::file_size(*it);
+    //
+    //    return dir_size;
 }
 
 
@@ -213,20 +215,26 @@ void sort_files ( MapVecFile & files, const Args & args )
     std::map<char, std::function<bool ( const File & a, const File & b )>> sorters = {
             {'U', [args] ( const File & a, const File & b ) { return true; }},
 
-            {'S', [args] ( const File & a, const File & b ) { return ( a.size < b.size ); }},
+            {'S', [args] ( const File & a, const File & b ) {
+                return (
+                        ( a.size != b.size )
+                        ? a.size < b.size
+                        : a.full_time > b.full_time
+                );
+            }},
 
             {'t', [args] ( const File & a, const File & b ) { return ( a.full_time > b.full_time ); }},
 
             {'X', [args] ( const File & a, const File & b ) {
                 return (
-                               (( a.name.find_last_of('.') != std::string::npos )
-                                ? a.name.substr(a.name.find_last_of('.'), std::string::npos)
+                        (( a.name.find_last_of('.') != std::string::npos )
+                         ? a.name.substr(a.name.find_last_of('.'), std::string::npos)
+                         : ""
+                        ).compare(
+                                ( b.name.find_last_of('.') != std::string::npos )
+                                ? b.name.substr(b.name.find_last_of('.'), std::string::npos)
                                 : ""
-                               ).compare(
-                                       ( b.name.find_last_of('.') != std::string::npos )
-                                       ? b.name.substr(b.name.find_last_of('.'), std::string::npos)
-                                       : ""
-                               ) < 0 );
+                        ) < 0 );
             }},
 
             {'N', [args] ( const File & a, const File & b ) { return ( a.name.compare(b.name) < 0 ); }},
@@ -251,7 +259,7 @@ void sort_files ( MapVecFile & files, const Args & args )
             std::sort(vecFile.second.begin(), vecFile.second.end(), sorters[sort_type]);
 
     for ( auto & vecFile : files )
-        if (args.reverse)
+        if ( args.reverse )
             std::reverse(vecFile.second.begin(), vecFile.second.end());
 }
 
