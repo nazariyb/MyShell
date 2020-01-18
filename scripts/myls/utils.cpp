@@ -9,6 +9,7 @@
 #include "utils.h"
 #include "table_printer/table_printer.h"
 
+int exit_code {SUCCESS};
 
 Args parse_arguments ( int argc, char * argv[] )
 {
@@ -52,8 +53,12 @@ Args parse_arguments ( int argc, char * argv[] )
 
         args.help = vm["help"].as<bool>();
 
-        args.sort_type = (( vm.count("sort"))) ? vm["sort"].as<std::string>() : "U";
-
+        args.sort_type = (( vm.count("sort"))) ? vm["sort"].as<std::string>() : "N";
+        if ( args.sort_type.find("D") != std::string::npos )
+        {
+            boost::erase_all(args.sort_type, "D");
+            args.sort_type += "D";
+        }
 
         args.reverse = vm["-r"].as<bool>();
 
@@ -89,23 +94,44 @@ std::string time2str ( const std::time_t & t )
 }
 
 
-FILE_TYPE file_type ( const fs::file_status & status )
+FILE_TYPE file_type ( const fs::path & status )
 {
-    auto type = status.type();
+    auto type = fs::status(status).type();
 
     if ( type == fs::file_type::directory_file )
         return DIRECTORY;
-    if ( type == fs::file_type::symlink_file )
+    if ( fs::symlink_status(status).type() == fs::symlink_file )
         return SYMLINK;
     if ( type == fs::file_type::fifo_file )
         return CHANNEL;
     if ( type == fs::file_type::socket_file )
         return SOCKET;
-    if ( status.permissions() & S_IEXEC )
+    if ( fs::status(status).permissions() & S_IEXEC )
         return EXECUTABLE;
     if ( type == fs::file_type::regular_file )
         return REGULAR;
     return OTHER;
+}
+
+
+boost::uintmax_t directory_size ( const fs::path & dir_path )
+{
+#ifdef __linux__
+    return 4096;
+#else
+    return 0;
+#endif
+
+//  Logic does not work here :(
+//    boost::uintmax_t dir_size {0};
+//
+//    for ( fs::recursive_directory_iterator it(dir_path);
+//          it != fs::recursive_directory_iterator();
+//          ++it )
+//        if ( !fs::is_directory(*it))
+//            dir_size += fs::file_size(*it);
+//
+//    return dir_size;
 }
 
 
@@ -116,11 +142,11 @@ void add_file ( VecFile & files, const fs::path & full_path )
 
     files.emplace_back(
             current_filename.string(),
-            ( fs::is_directory(full_path)) ? 0 : fs::file_size(full_path),
+            ( fs::is_directory(full_path)) ? directory_size(full_path) : fs::file_size(full_path),
             date2str(t),
             time2str(t),
             t,
-            FileType {file_type(fs::status(full_path))}
+            FileType {file_type(full_path)}
     );
 }
 
@@ -166,6 +192,7 @@ MapVecFile get_files ( VecStr & paths, bool recursive )
         catch ( std::exception & ex )
         {
             cerr << "myls: " << ex.what() << endl;
+            exit_code = GET_FILES_LIST_ERROR;
         }
     }
 
@@ -175,7 +202,9 @@ MapVecFile get_files ( VecStr & paths, bool recursive )
 
 bool is_special_file ( const File & file )
 {
-    return (( file.type.type_name != REGULAR ) && ( file.type.type_name != DIRECTORY ));
+    return (( file.type.type_name != REGULAR )
+            && ( file.type.type_name != DIRECTORY )
+            && ( file.type.type_name != EXECUTABLE ));
 }
 
 
@@ -184,24 +213,30 @@ void sort_files ( MapVecFile & files, const Args & args )
     std::map<char, std::function<bool ( const File & a, const File & b )>> sorters = {
             {'U', [args] ( const File & a, const File & b ) { return true; }},
 
-            {'S', [args] ( const File & a, const File & b ) { return ( a.size > b.size ) ^ args.reverse; }},
+            {'S', [args] ( const File & a, const File & b ) { return ( a.size < b.size ); }},
 
-            {'t', [args] ( const File & a, const File & b ) { return ( a.full_time > b.full_time ) ^ args.reverse; }},
+            {'t', [args] ( const File & a, const File & b ) { return ( a.full_time > b.full_time ); }},
 
             {'X', [args] ( const File & a, const File & b ) {
-                return (( a.name.substr(a.name.find_last_of('.'), std::string::npos).compare(
-                        b.name.substr(b.name.find_last_of('.'), std::string::npos))) < 0 )
-                       ^ args.reverse;
+                return (
+                               (( a.name.find_last_of('.') != std::string::npos )
+                                ? a.name.substr(a.name.find_last_of('.'), std::string::npos)
+                                : ""
+                               ).compare(
+                                       ( b.name.find_last_of('.') != std::string::npos )
+                                       ? b.name.substr(b.name.find_last_of('.'), std::string::npos)
+                                       : ""
+                               ) < 0 );
             }},
 
-            {'N', [args] ( const File & a, const File & b ) { return ( a.name.compare(b.name) < 0 ) ^ args.reverse; }},
+            {'N', [args] ( const File & a, const File & b ) { return ( a.name.compare(b.name) < 0 ); }},
 
             {'D', [args] ( const File & a, const File & b ) {
-                return ( a.type.type_name == DIRECTORY && b.type.type_name != DIRECTORY ) ^ args.reverse;
+                return ( a.type.type_name == DIRECTORY && b.type.type_name != DIRECTORY );
             }},
 
             {'s', [args] ( const File & a, const File & b ) {
-                return ( is_special_file(a) && !is_special_file(b)) ^ args.reverse;
+                return ( is_special_file(a) && !is_special_file(b));
             }}
     };
 
@@ -214,6 +249,10 @@ void sort_files ( MapVecFile & files, const Args & args )
     for ( auto & vecFile : files )
         for ( auto & sort_type: args.sort_type )
             std::sort(vecFile.second.begin(), vecFile.second.end(), sorters[sort_type]);
+
+    for ( auto & vecFile : files )
+        if (args.reverse)
+            std::reverse(vecFile.second.begin(), vecFile.second.end());
 }
 
 

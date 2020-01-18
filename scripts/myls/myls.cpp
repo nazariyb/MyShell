@@ -60,7 +60,6 @@ int main ( int argc, char * argv[] )
     catch ( std::exception & ex )
     {
         cerr << "myls: " << ex.what() << endl;
-        return GET_FILES_LIST_ERROR;
     }
 
     try
@@ -83,6 +82,6 @@ int main ( int argc, char * argv[] )
         return PRINT_FILES_ERROR;
     }
 
-    return SUCCESS;
+    return exit_code;
 }
 
