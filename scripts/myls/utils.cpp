@@ -255,7 +255,7 @@ void sort_files ( MapVecFile & files, const Args & args )
 
             {'s', [args] ( const File & a, const File & b ) {
                 return (
-                        ( is_special_file(a) && is_special_file(b))
+                        ( is_special_file(a) && is_special_file(b) )
                         ? a.name.compare(b.name) < 0
                         : is_special_file(a) && !is_special_file(b)
                 );
@@ -268,12 +268,13 @@ void sort_files ( MapVecFile & files, const Args & args )
                     "Unknown argument '" + std::string(1, sort_type) + "'. Use --help|-h for more info."
             );
 
-    for ( auto & vecFile : files )
-        for ( auto & sort_type: args.sort_type )
-            std::sort(vecFile.second.begin(), vecFile.second.end(), sorters[sort_type]);
+    if ( args.sort_type != "U" )
+        for ( auto & vecFile : files )
+            for ( auto & sort_type: args.sort_type )
+                std::sort(vecFile.second.begin(), vecFile.second.end(), sorters[sort_type]);
 
-    for ( auto & vecFile : files )
-        if ( args.reverse )
+    if ( args.reverse )
+        for ( auto & vecFile : files )
             std::reverse(vecFile.second.begin(), vecFile.second.end());
 }
 
